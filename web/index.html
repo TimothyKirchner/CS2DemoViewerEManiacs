@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101419"><title>Strat Scope · CS2 Demo Viewer</title><meta name="description" content="Read the round. See the setup. A private CS2 tactical replay viewer with grenade trails, utility effects and pistol strategy playback."><link rel="stylesheet" href="./style.css"></head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./" aria-label="Strat Scope home"><svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true"><path d="M5 5h26v26H5z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M18 8v20M8 18h20" stroke="currentColor" opacity=".35"/><path d="m11 25 7-15 7 15-7-5z" fill="currentColor"/></svg><span>STRAT<span class="brand-light">SCOPE</span><small>COUNTER-STRIKE 2 / DEMO REVIEW</small></span></a>
+  <div class="file-context"><span class="status-dot"></span><span id="file-name">Your next read starts here</span><span class="local-badge">LOCAL PROCESSING</span></div>
+  <button id="diagnostics-button" class="quiet" title="View the most recent import report">Diagnostics</button>
+  <button id="help-button" class="icon-button" title="Help and keyboard shortcuts" aria-label="Help and keyboard shortcuts">?</button>
+  <button id="export-button" class="quiet" disabled>Export replay</button>
+  <label class="button primary open-label" for="demo-file"><span aria-hidden="true">＋</span> Open demo</label><input type="file" id="demo-file" accept=".dem,.strats,.json" hidden>
+</header>
+<main class="workspace">
+  <aside class="left-panel">
+    <div class="section-label">MATCH OVERVIEW <span id="match-format">.DEM</span></div>
+    <div class="map-title"><h1 id="map-title">No demo loaded</h1><span id="map-subtitle">Drop a file to get started</span></div>
+    <button id="pistols" class="pistol-button" disabled><span class="pistol-symbol" aria-hidden="true">↳</span><span>Pistol strats<small id="pistol-hint">Both halves. One playback.</small></span><span class="key-tag">P</span></button>
+    <div class="section-label rounds-heading">ROUNDS <span id="round-count">—</span></div>
+    <div id="rounds" class="round-grid" aria-label="Jump to a round"><p class="muted placeholder-text">Your rounds will appear here.</p></div>
+    <div class="round-legend"><i class="dot t"></i>T win <i class="dot ct"></i>CT win <i class="pistol-dot"></i>Pistol</div>
+    <section id="scouting" class="scouting" hidden>
+      <div class="section-label">ESEA SCOUTING <span>TEAM TENDENCIES</span></div>
+      <div id="representative-rounds" class="scout-rounds"></div>
+      <button id="special-rounds-toggle" class="quiet" aria-expanded="true" aria-controls="special-rounds">Special rounds</button>
+      <div id="special-rounds" class="scout-specials"></div>
+      <div id="scouting-warnings" class="scout-warnings" hidden></div>
+      <div class="heatmap-controls" aria-label="Team heatmaps"><span>Weighted heatmap</span><button data-heatmap="2" aria-pressed="false">T</button><button data-heatmap="3" aria-pressed="false">CT</button></div>
+    </section>
+    <div class="divider"></div>
+    <label class="section-label" for="team-filter">FOCUS TEAM</label>
+    <select id="team-filter"><option value="all">Both teams</option><option value="2">Team 1 · started T</option><option value="3">Team 2 · started CT</option></select>
+    <p class="micro muted">Follows the same players across halftime.</p>
+    <div class="section-label layer-heading">MAP LAYERS <button id="reset-layers" class="text-button">Reset</button></div>
+    <label class="toggle-row"><span>Player names</span><input id="names-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Best weapon icons</span><input id="weaponIcons-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Armor icons</span><input id="armorIcons-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Grenade icons</span><input id="grenadeIcons-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Look direction</span><input id="look-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Grenade flight paths</span><input id="paths-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Utility effects</span><input id="effects-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Approx. flash reach</span><input id="flashReach-toggle" type="checkbox"><i></i></label>
+    <label class="toggle-row"><span>Player trails</span><input id="trails-toggle" type="checkbox"><i></i></label>
+    <label class="toggle-row"><span>Weapon fire</span><input id="shots-toggle" type="checkbox" checked><i></i></label>
+    <label class="toggle-row"><span>Skip freeze time</span><input id="freeze-toggle" type="checkbox" checked><i></i></label>
+    <div class="panel-foot"><span class="status-dot"></span> Demo files stay on your device.<br><button id="about-button" class="text-button">About utility & map accuracy ↗</button></div>
+  </aside>
+  <section class="viewer">
+    <div class="viewer-toolbar"><div class="round-info"><span id="round-label">TACTICAL VIEW</span><span class="separator">/</span><span id="phase">Waiting for a demo</span></div><div class="view-tools"><select id="floor-select" aria-label="Map floor" hidden><option value="upper">Upper floor</option><option value="lower">Lower floor</option><option value="all">All floors · upper radar</option></select><button id="zoom-out" class="icon-button" title="Zoom out" aria-label="Zoom out">−</button><button id="zoom-reset" class="text-button" title="Reset map view">100%</button><button id="zoom-in" class="icon-button" title="Zoom in" aria-label="Zoom in">＋</button><button id="fullscreen" class="icon-button" title="Fullscreen" aria-label="Fullscreen">⛶</button></div></div>
+    <div id="map-wrap" class="map-wrap">
+      <canvas id="radar" aria-label="Tactical map. Players, view directions and utility are shown during replay."></canvas>
+      <div class="map-corner"><span class="north-arrow">↑</span> NORTH UP</div>
+      <div id="sample-badge" class="sample-badge" hidden>PUBLIC SAMPLE MATCH</div>
+      <div id="empty" class="empty-state"><div class="eyebrow">THE ROUND, FROM ABOVE</div><h2>See the setup.<br>Read the strategy.</h2><p>Open a CS2 demo to follow every player,<br>every grenade and every rotation.</p><label for="demo-file" class="button primary">Open .dem file <span aria-hidden="true">↗</span></label><button id="sample-button" class="sample-link">Explore a real sample match →</button><span class="file-note">FACEIT · Premier · GOTV &nbsp; / &nbsp; .dem files</span></div>
+      <div id="loading" class="loading-state" hidden><div class="spinner"></div><h2 id="loading-title">Opening demo</h2><p id="loading-stage">Reading locally…</p><progress id="loading-progress" max="100" value="0"></progress><p class="micro muted">Large matches can take a little while.</p><button id="cancel-load" class="quiet">Cancel</button></div>
+      <div id="map-error" class="map-error" hidden></div>
+      <div class="map-legend"><span><i class="dot t"></i>T</span><span><i class="dot ct"></i>CT</span><span><i class="utility-dot smoke"></i>Smoke</span><span><i class="utility-dot fire"></i>Fire</span><span><i class="utility-dot flash"></i>Flash</span><span class="approx-label" title="Reference radii do not account for walls, facing, or line of sight. Actual blinded players are marked from demo events.">Approx. reference areas</span></div>
+      <div id="drop-overlay" hidden>Drop your demo here<span>.dem · .strats</span></div>
+    </div>
+    <footer class="playback">
+      <div class="timeline-info"><span id="elapsed">00:00</span><span id="mode-label">Round playback</span><span id="duration">00:00</span></div>
+      <div class="timeline-wrap"><div id="event-marks" aria-hidden="true"></div><input id="timeline" type="range" min="0" max="100" value="0" step="1" disabled aria-label="Replay timeline"></div>
+      <div class="playback-controls"><div class="transport"><button id="prev-round" class="icon-button" disabled title="Previous round [" aria-label="Previous round">|‹</button><button id="back" class="icon-button" disabled title="Back 5 seconds ←" aria-label="Back 5 seconds">−5</button><button id="play" class="play-button" disabled title="Play or pause (Space)" aria-label="Play">▶</button><button id="forward" class="icon-button" disabled title="Forward 5 seconds →" aria-label="Forward 5 seconds">+5</button><button id="next-round" class="icon-button" disabled title="Next round ]" aria-label="Next round">›|</button></div><div id="speed-buttons" class="speeds" aria-label="Playback speed"><button data-speed="0.5">0.5×</button><button data-speed="1" class="selected" aria-pressed="true">1×</button><button data-speed="2">2×</button><button data-speed="4">4×</button><button data-speed="8">8×</button><button data-speed="16">16×</button></div><button id="loop" class="loop-button" aria-pressed="false" title="Repeat current round (L)">↻ <span>Loop round</span></button></div>
+    </footer>
+  </section>
+  <aside class="right-panel">
+    <div class="section-label">ON THE SERVER <span id="alive-count">—</span></div>
+    <div id="roster"><div class="roster-placeholder"><div class="team-head t-text">TERRORISTS <span>—</span></div><p>Player names, health and loadouts<br>appear when you open a demo.</p><div class="team-head ct-text">COUNTER-TERRORISTS <span>—</span></div><p>Select a player to highlight their<br>position and utility.</p></div></div>
+    <div class="divider"></div>
+    <div class="right-tabs"><button class="selected" data-tab="events">Round events</button><button data-tab="utility">Utility</button><button data-tab="notes">Notes</button></div>
+    <div id="events-panel" class="tab-panel"><div id="event-feed" class="event-feed"><p class="muted placeholder-text">Kills, plants and defuses,<br>linked to the timeline.</p></div></div>
+    <div id="utility-panel" class="tab-panel" hidden><div class="utility-filters"><button class="selected" data-utility="all">All</button><button data-utility="smoke">Smoke</button><button data-utility="fire">Fire</button><button data-utility="flash">Flash</button><button data-utility="he">HE</button></div><div id="utility-feed" class="event-feed"></div></div>
+    <div id="notes-panel" class="tab-panel" hidden><p class="micro muted">Notes are saved in this browser. Export a replay to keep or share them.</p><textarea id="note-text" rows="3" maxlength="2000" placeholder="A late B split? Save the read…" aria-label="Review note"></textarea><button id="add-note" class="button secondary" disabled>＋ Note at current time</button><div id="notes-list"></div></div>
+    <div class="right-foot"><span id="selected-label">All players</span><button id="clear-selection" class="text-button" hidden>Clear</button><span class="shortcut-hint">SPACE play/pause &nbsp; ← → seek</span></div>
+  </aside>
+</main>
+<div id="toast" role="status" hidden></div>
+<dialog id="help-dialog"><div class="dialog-top"><h2>Made for the next read.</h2><button id="close-help" class="icon-button" aria-label="Close help">✕</button></div><p>Open an uncompressed CS2 <strong>.dem</strong> file. Parsing happens in a background worker on your device. You can also import an exported <strong>.strats</strong> replay.</p><h3>The essentials</h3><ul><li>Click a round to jump. Use <strong>Pistol strats</strong> to play R1 followed by the detected second-half pistol, then stop.</li><li>Focus a team to keep tracking that roster after the side switch. Click a player to emphasize their movement and utility.</li><li>Scroll to zoom, drag to pan, double-click to reset. Use the floor selector on Nuke, Vertigo and Train.</li><li>Click a utility event to replay its flight and detonation. The timeline and all effects support backwards seeking.</li></ul><h3>Accuracy</h3><p>Player positions, facing, grenade flight, effect centers and available expiry events come from the demo. <strong>Smoke and fire areas are approximate footprints</strong>: they do not model wall clipping, flame cells or temporary smoke holes. A <strong>~</strong> marks an estimated lifetime when an expiry event is missing.</p><p>Bundled map images use matching overview coordinates. Older demos can contain a different map revision. You can import a matching radar and its coordinates below; unsupported maps are never silently shown as a different map.</p><details><summary>Use a custom / historical radar</summary><div class="custom-map"><label>Radar image<input id="custom-radar" type="file" accept="image/png,image/jpeg,image/webp"></label><label>Overview pos_x<input id="map-x" type="number" step="any"></label><label>Overview pos_y<input id="map-y" type="number" step="any"></label><label>Overview scale<input id="map-scale" type="number" min="0.01" step="any"></label><button id="apply-map" class="button secondary">Apply radar</button><p class="micro muted">Use the values from that map version's overview file. Coordinates refer to a 1024-unit radar square. Saved in exported replays.</p></div></details><h3>Keyboard shortcuts</h3><div class="keyboard-grid"><span>Space</span><span>Play / pause</span><span>← / →</span><span>Seek 5 seconds</span><span>[ / ]</span><span>Previous / next round</span><span>P</span><span>Pistol strats</span><span>L</span><span>Loop current round</span><span>Home</span><span>Restart round</span></div><p class="micro muted credits">Parser: <a href="https://github.com/LaihoE/demoparser" target="_blank" rel="noreferrer">demoparser2</a> (MIT). Radar assets: Valve, via <a href="https://github.com/MurkyYT/cs2-map-icons" target="_blank" rel="noreferrer">cs2-map-icons</a>. Independent fan tool. Sample: public demoparser test fixture. <a href="./vendor/demoparser-LICENSE.txt" target="_blank">Parser license</a>.</p></dialog>
+<dialog id="diagnostics-dialog" aria-labelledby="diagnostic-title" aria-describedby="diagnostic-summary">
+  <div class="dialog-top"><h2 id="diagnostic-title">Import diagnostics</h2><button id="close-diagnostics" class="icon-button" aria-label="Close diagnostics">✕</button></div>
+  <p id="diagnostic-summary"></p>
+  <p id="diagnostic-hint" class="diagnostic-hint" hidden>“Entity not found” does not identify a specific entity or tick. This report records which parsing step failed and all error details the parser returned; the cause still needs investigation.</p>
+  <p class="micro muted">Includes the filename, app/parser versions, system information, parsing steps and available error details. No demo contents are attached or uploaded. You can review the report before sharing it.</p>
+  <label for="diagnostic-report" class="section-label">LATEST IMPORT REPORT</label>
+  <textarea id="diagnostic-report" readonly spellcheck="false" rows="14"></textarea>
+  <div class="diagnostic-actions"><button id="copy-diagnostics" class="button primary">Copy report</button><button id="save-diagnostics" class="button secondary">Save report (.json)</button></div>
+  <p id="diagnostic-status" class="micro" role="status" aria-live="polite"></p>
+</dialog>
+<script type="module" src="./app.mjs"></script>
+</body></html>

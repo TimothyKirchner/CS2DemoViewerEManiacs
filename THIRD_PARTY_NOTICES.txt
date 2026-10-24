@@ -1,0 +1,19 @@
+Strat Scope is an independent fan tool, not affiliated with Valve.
+
+Demo parser: LaihoE/demoparser (demoparser2), MIT.
+https://github.com/LaihoE/demoparser
+Full license: web/vendor/demoparser-LICENSE.txt.
+Revision: 45ca85aeac8fb0de9d385124d2c7fe0e7b8ff0c8
+Public sample: src/parser/test_demo.dem from the same repository.
+
+Radar assets and map/game content: Valve and their respective owners,
+distributed through https://github.com/MurkyYT/cs2-map-icons
+Revision: e2e3a061475b3461fda61f52041b01b0c4c4cde6
+Original overview metadata is retained in web/maps/.
+
+Electron: https://github.com/electron/electron (MIT).
+Electron's LICENSE and LICENSES.chromium.html are included with its runtime.
+electron-builder: https://github.com/electron-userland/electron-builder (MIT).
+
+Parser rebuilt from source with the included wasm-compatibility.patch.
+Details: web/vendor/PARSER_BUILD.md.

@@ -1,0 +1,23 @@
+// Optional integration check: node tests/real-demo.mjs /absolute/path/to/match.dem
+import fs from "node:fs";import vm from "node:vm";import zlib from "node:zlib";import assert from "node:assert/strict";
+import {validateReplay} from "../web/core.mjs";
+import {parseDemo} from "../web/parse-demo.mjs";
+import {createReport,finishReport} from "../web/diagnostics.mjs";
+const base=new URL("../web/vendor/",import.meta.url);vm.runInThisContext(fs.readFileSync(new URL("demoparser2.js",base),"utf8")+";globalThis.dp=wasm_bindgen;");await dp({module_or_path:fs.readFileSync(new URL("demoparser2_bg.wasm",base))});
+const data=new Uint8Array(fs.readFileSync(process.argv[2]));const started=Date.now();
+const report=createReport({name:"public-test.dem",size:data.length});
+const replay=validateReplay(await parseDemo(data,"Public sample — Mirage.dem",dp,report,m=>console.log(m.stage)));
+finishReport(report);
+assert.equal(report.status,"completed");assert.equal(report.context.roundCount,9);assert.equal(report.context.playerSampleCount,126700);
+assert.ok(!JSON.stringify(report).includes("steamid"));
+assert.equal(replay.map,"de_mirage");assert.equal(replay.tickRate,64);assert.equal(replay.rounds.length,9);assert.equal(replay.players.length,10);
+const effects=replay.rounds.flatMap(r=>r.effects);assert(effects.some(e=>e.type==="smoke"&&!e.estimatedLifetime));assert(effects.some(e=>e.type==="fire"&&!e.estimatedLifetime));assert(replay.rounds.some(r=>r.grenades.length));
+const shots=replay.rounds.flatMap(r=>r.events.filter(e=>e.event_name==='weapon_fire'));
+assert.ok(shots.length>1000,'real weapon fire parsed');
+assert.ok(shots.every(e=>Number.isFinite(e.user_yaw)&&Number.isFinite(e.user_X)),'recorded firing angles and locations');
+const equipment=replay.rounds.flatMap(r=>r.frames[0].players);
+assert.ok(equipment.some(p=>p.hasHelmet===true),'helmet data parsed');
+assert.ok(replay.rounds.some(r=>r.frames.some(f=>f.players.some(p=>p.hasDefuser===true))),'defuse equipment parsed');
+const json=JSON.stringify(replay),buffer=zlib.gzipSync(json,{level:9});
+if(process.argv.includes("--write-sample"))fs.writeFileSync(new URL("../web/sample.strats",import.meta.url),buffer);
+console.log(JSON.stringify({seconds:(Date.now()-started)/1000,map:replay.map,rounds:replay.rounds.length,players:replay.players.length,pistols:replay.pistols,effects:effects.length,paths:replay.rounds.reduce((n,r)=>n+r.grenades.length,0),jsonBytes:json.length,gzipBytes:buffer.length,warnings:replay.warnings},null,2));

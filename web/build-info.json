@@ -1,0 +1,16 @@
+{
+  "app": {
+    "name": "Strat Scope",
+    "version": "1.1.1"
+  },
+  "parser": {
+    "name": "demoparser2",
+    "revision": "45ca85aeac8fb0de9d385124d2c7fe0e7b8ff0c8",
+    "buildType": "compiled-from-source",
+    "rustVersion": "1.99.1",
+    "wasmBindgenVersion": "0.2.100",
+    "wasmSha256": "449e5d4a5a5f0f333a7967a693523e8e818e4f58f5c9ecc0851ac23a1c176a08",
+    "bindingsSha256": "b339dd56feb3c1da25b6d35e75e576fae63095a64026b67f9ab73750bd33a480",
+    "compatibilityPatchSha256": "e65a5731a46f376d4ed16bb869d838305aec70f1cb775514fc326b132b48f012"
+  }
+}

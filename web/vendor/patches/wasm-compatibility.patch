@@ -1,0 +1,69 @@
+--- a/src/csgoproto/Cargo.toml
++++ b/src/csgoproto/Cargo.toml
+@@ -1,4 +1,5 @@
+ [package]
++build = false
+ name = "csgoproto"
+ version = "0.1.5"
+ authors = ["Laiho"]
+--- a/src/parser/src/parse_demo.rs
++++ b/src/parser/src/parse_demo.rs
+@@ -64,10 +64,13 @@
+         }
+     }
+     pub fn parse_demo(&mut self, demo_bytes: &[u8]) -> Result<DemoOutput, DemoParserError> {
++        #[cfg(not(target_arch = "wasm32"))]
+         let _prof = std::env::var("CS2_PROF").is_ok();
++        #[cfg(not(target_arch = "wasm32"))]
+         let _t = std::time::Instant::now();
+         let mut first_pass_parser = FirstPassParser::new(&self.input);
+         let first_pass_output = first_pass_parser.parse_demo(demo_bytes, false)?;
++        #[cfg(not(target_arch = "wasm32"))]
+         if _prof {
+             eprintln!("[prof] first_pass: {:.3}s", _t.elapsed().as_secs_f64());
+         }
+@@ -131,20 +134,26 @@
+         events.extend(ids.values().map(|x| x.clone()));
+     }
+     fn second_pass_single_threaded(&self, outer_bytes: &[u8], first_pass_output: FirstPassOutput) -> Result<DemoOutput, DemoParserError> {
++        #[cfg(not(target_arch = "wasm32"))]
+         let prof = std::env::var("CS2_PROF").is_ok();
++        #[cfg(not(target_arch = "wasm32"))]
+         let mut t = std::time::Instant::now();
+         let mut parser = SecondPassParser::new(first_pass_output.clone(), 16, true, None)?;
+         parser.start(outer_bytes)?;
++        #[cfg(not(target_arch = "wasm32"))]
+         if prof { eprintln!("[prof] second_pass start(): {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
+         let second_pass_output = parser.create_output();
++        #[cfg(not(target_arch = "wasm32"))]
+         if prof { eprintln!("[prof] create_output: {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
+         let mut outputs = self.combine_outputs(&mut vec![second_pass_output], first_pass_output);
++        #[cfg(not(target_arch = "wasm32"))]
+         if prof { eprintln!("[prof] combine_outputs: {:.3}s", t.elapsed().as_secs_f64()); t = std::time::Instant::now(); }
+         if let Some(new_df) = self.rm_unwanted_ticks(&mut outputs.df) {
+             outputs.df = new_df;
+         }
+         Parser::add_item_purchase_sell_column(&mut outputs.game_events);
+         Parser::remove_item_sold_events(&mut outputs.game_events);
++        #[cfg(not(target_arch = "wasm32"))]
+         if prof { eprintln!("[prof] post-proc: {:.3}s", t.elapsed().as_secs_f64()); }
+         Ok(outputs)
+     }
+--- a/src/wasm/src/lib.rs
++++ b/src/wasm/src/lib.rs
+@@ -316,12 +316,12 @@
+     let settings = ParserInputs {
+         wanted_players: vec![],
+         real_name_to_og_name: real_name_to_og_name.into(),
+-        wanted_player_props: real_names.clone(),
+-        wanted_other_props: vec![],
++        wanted_player_props: vec![],
++        wanted_other_props: real_names.clone(),
+         wanted_events: vec![],
+         parse_ents: true,
+         wanted_ticks: vec![],
+-        parse_projectiles: false,
++        parse_projectiles: true,
+         only_header: false,
+         list_props: false,
+         only_convars: false,
