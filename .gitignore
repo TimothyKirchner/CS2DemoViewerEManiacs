@@ -5,3 +5,11 @@ release/
 verification/portable/
 *.dem
 __pycache__/
+
+# agent-hub
+*.dem.bz2
+build/
+dist/
+target/
+out/
+.venv/

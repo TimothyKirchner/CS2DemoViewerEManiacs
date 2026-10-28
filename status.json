@@ -1,0 +1,22 @@
+{
+    "project":  "cs2-demo",
+    "updated":  "2026-10-28",
+    "next_session":  {
+                         "when":  null,
+                         "what":  "Decide whether to commit/push the uncommitted 1.2.0 work",
+                         "minutes":  60
+                     },
+    "goals":  [
+                  "Strat Scope 2D viewer: ship 1.2.0",
+                  "Later: automated 3D demo review tool reusing the parser"
+              ],
+    "deadlines":  [
+
+                  ],
+    "time_needed_hours_per_week":  0,
+    "priority":  2,
+    "min_sessions_per_week":  0,
+    "skipped":  [
+
+                ]
+}
