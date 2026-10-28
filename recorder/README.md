@@ -22,6 +22,10 @@ node recorder/record-clips.mjs --plan ../match.clips.json --mode obs
 
 - `--review` reviews the saved `.scopereview` and records featured clips; `--player <name>`, `--all`,
   `--only <id|index,...>` and `--top N` change the selection. `--plan` takes the UI's "Export clips" file.
+- `"player"` in `recorder.json` (name or SteamID64; the SteamID is in `Steam\config\loginusers.vdf`) makes
+  every run record only that player, keeping up to `playerClips` (default 10) clips. `--all`/`--only` override it.
+  If the player is not in the demo, the run stops and lists the players it found.
+- `--review` also takes a `.dem` and parses it first (about 1 minute for a 200 MB demo).
 - The demo is expected next to the input file under its original name; override with `--demo`.
 - `--dry-run` writes subtitles, `plan.json` and `clips.md` and prints every command without starting CS2.
 - `--no-launch` attaches to a CS2 already started with `-netconport 2121`; `--keep-open` leaves it running.

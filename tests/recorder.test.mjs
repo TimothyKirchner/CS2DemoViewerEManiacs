@@ -22,6 +22,7 @@ test("clip selection defaults to featured, then honours player, only and top", (
   assert.deepEqual(selectClips(plan, {player: "ann"}, featured).map(c => c.id), ["a", "c"]);
   assert.deepEqual(selectClips(plan, {only: ["3"]}, featured).map(c => c.id), ["c"]);
   assert.deepEqual(selectClips(plan, {top: 1}, featured).map(c => c.id), ["a"]);
+  assert.deepEqual(selectClips(plan, {player: "76561198000000002"}, featured).map(c => c.id), ["b"]);
 });
 
 test("non-Latin names get an account-id file tag", () => {

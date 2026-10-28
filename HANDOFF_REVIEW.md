@@ -48,9 +48,11 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
 - `node` is not on PATH; use the Codex runtime node (see AGENTS.md).
 
 ## Next steps
-1. Real recording run needs a demo recorded on CS2 patch >= 14193 (any match played/downloaded after the
-   2026-10-28 update). Then: `node recorder/record-clips.mjs --review <new>.dem --top 2` (ask Frank before
-   starting CS2; Steam must be running; accept Steam's launch-args prompt).
+1. Frank (in-game "Kampu", SteamID64 76561198083553699) will produce a post-update demo (CS2 patch >= 14193)
+   on 2026-10-29. Recordings focus only on him: `recorder/recorder.json` has `"player"` set to his SteamID,
+   which keeps up to 10 clips for him and records all of them. Run:
+   `node recorder/record-clips.mjs --review <new>.dem` (ask Frank before starting CS2; Steam must be running;
+   accept Steam's launch-args prompt). The demos in Downloads\demos\28_10 are scouting demos without him.
 2. During that run, verify: parser tick == `demo_gototick` tick (recorder logs `demo_info` after each seek);
    whether gototick keeps the pause; OBS lead trim; subtitle timing against the video.
 3. Regenerate `verification/package-manifest.json` with a local build + `verify-package` (web/ changed).

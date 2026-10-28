@@ -20,6 +20,9 @@ const VIDEO_EXT = /\.(mp4|mkv|mov|avi|flv|webm)$/i;
 
 export const DEFAULTS = {
   mode: "hlae",
+  player: "",
+  // Clips kept per player by the review; raised when the run focuses on one player.
+  playerClips: 10,
   cs2: "",
   hlae: {
     exe: "",
@@ -235,13 +238,16 @@ export async function main(argv = process.argv.slice(2)) {
   if (o.help) { say(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 5).map(l => l.replace(/^\/\/ ?/, "")).join("\n")); return; }
   const cfg = loadConfig(o.config ?? path.join(HERE, "recorder.json"));
   if (o.mode) cfg.mode = o.mode;
+  // recorder.json "player" focuses every run on one player (name or SteamID64) unless --all or --only is given.
+  if (!o.all && !o.only.length) o.player ??= cfg.player || undefined;
   if (!["hlae", "obs"].includes(cfg.mode)) throw new Error(`mode must be "hlae" or "obs"`);
   cfg.cs2 ||= findCs2();
   if (cfg.steam === undefined) cfg.steam = findSteam();
 
   let plan, featured = null, demo = o.demo, baseFile = o.review ?? o.plan;
   if (o.review) {
-    const data = /\.dem$/i.test(o.review) ? await parseDemFile(o.review) : readReviewFile(o.review), review = reviewReplay(data.replay, {detail: data.detail});
+    const data = /\.dem$/i.test(o.review) ? await parseDemFile(o.review) : readReviewFile(o.review);
+    const review = reviewReplay(data.replay, {detail: data.detail, perPlayer: o.player ? cfg.playerClips : 4});
     if (/\.dem$/i.test(o.review)) demo ||= path.resolve(o.review);
     featured = new Set(review.clips.filter(c => c.featured).map(c => c.id));
     plan = buildRecordingPlan(data.replay, review, review.clips);
@@ -249,6 +255,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (plan.format !== "strat-scope-recording-plan") throw new Error("Not a Strat Scope recording plan");
   demo ||= path.resolve(path.dirname(baseFile), path.basename(plan.demoFile ?? ""));
   const clips = selectClips(plan, o, featured);
+  if (o.player && !clips.length) throw new Error(`No clips for player "${o.player}". Players in this demo: ${[...new Set(plan.clips.map(c => c.player))].join(", ")}`);
   if (!clips.length) throw new Error("No clips selected (try --all or --player)");
   const out = path.resolve(o.out ?? baseFile.replace(/\.(scopereview|json|dem)$/i, "") + "-clips");
   cfg.hlae.outputDir ||= path.join(out, "hlae-raw");
