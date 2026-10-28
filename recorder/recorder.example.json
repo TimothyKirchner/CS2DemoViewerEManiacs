@@ -1,0 +1,26 @@
+{
+  "mode": "hlae",
+  "cs2": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe",
+  "hlae": {
+    "exe": "C:\\Tools\\HLAE\\HLAE.exe",
+    "hookDll": "",
+    "outputDir": "",
+    "fps": 60,
+    "slowFactor": 2.5
+  },
+  "obs": {
+    "exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
+    "url": "ws://127.0.0.1:4455",
+    "password": "",
+    "slowFactor": 1
+  },
+  "ffmpeg": "ffmpeg",
+  "netconPort": 2121,
+  "width": 1920,
+  "height": 1080,
+  "startupSeconds": 20,
+  "demoLoadSeconds": 25,
+  "settleSeconds": 2,
+  "leadSeconds": 0,
+  "setupCommands": ["volume 0.4", "spec_show_xray 0"]
+}

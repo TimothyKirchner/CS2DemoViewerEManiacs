@@ -10,7 +10,7 @@ export function srtTime(seconds) {
   const ms = Math.max(0, Math.round(seconds * 1000)), p = (n, w = 2) => String(n).padStart(w, "0");
   return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`;
 }
-export function safeName(s) { return String(s ?? "").normalize("NFKD").replace(/[^\w.-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || "clip"; }
+export function safeName(s, fallback = "clip") { return String(s ?? "").normalize("NFKD").replace(/[^\w.-]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 60) || fallback; }
 
 // Subtitles: a title card, then each critique from shortly before its tick until the next one (max 6 s).
 export function clipSubtitles(clip, playerName, rate) {
@@ -31,9 +31,9 @@ export function buildRecordingPlan(replay, review, clips, {demoFile = replay.sou
   return {
     format: "strat-scope-recording-plan", version: PLAN_VERSION, demoFile, map: replay.map, tickRate: rate,
     clips: clips.map((c, i) => {
-      const player = names.get(c.player) ?? c.player;
+      const player = names.get(c.player) ?? c.player, tag = /[A-Za-z0-9]/.test(safeName(player, "")) ? safeName(player) : `id${accountId(c.player) ?? c.player}`;
       return {
-        id: c.id, index: i + 1, file: `${String(i + 1).padStart(2, "0")}_R${c.roundNumber}_${safeName(player)}_${safeName(c.title)}`,
+        id: c.id, index: i + 1, file: `${String(i + 1).padStart(2, "0")}_R${c.roundNumber}_${tag}_${safeName(c.title)}`,
         kind: c.kind, title: c.title, player, steamId: c.player, accountId: accountId(c.player), roundNumber: c.roundNumber,
         startTick: c.start, endTick: c.end, seconds: Math.round((c.end - c.start) / rate * 100) / 100,
         subtitles: clipSubtitles(c, player, rate),

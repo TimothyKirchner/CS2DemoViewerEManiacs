@@ -18,6 +18,10 @@ Global rules: `C:\Users\timot\Desktop\AIOverseer\AGENTS.md`. Read `HANDOFF.md` f
 - Session smoke: `.\node_modules\electron\dist\electron.exe tests\session-smoke.cjs`
 - Viewer smoke: `.\node_modules\electron\dist\electron.exe tests\viewer-smoke.cjs --demo ..\public-test.dem`
 - Real-demo stats: `node tests/statistics-real-demo.mjs ../public-test.dem`
+- Real-demo review: `node tests/review-real-demo.mjs ../public-test.dem --write ../public-test.scopereview`
+- Clip recorder: `node recorder/record-clips.mjs --review ../public-test.scopereview --top 2 --dry-run`
+  (drop `--dry-run` to start CS2; ask Frank first). Setup in recorder/README.md.
+- `node` is not on PATH here; use C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe.
 - Package check: `node scripts/verify-package.cjs`
 - Local build: `node .smoke-profile/build-local.cjs` (existing local build helper; publish never)
 - Python packager: scripts/package-source.py. Bundled Python: C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe

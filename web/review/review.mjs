@@ -4,6 +4,7 @@ import {createReport} from "../diagnostics.mjs";
 import {reviewReplay} from "./engine/review.mjs";
 import {frameBefore, clock as roundClock, isGun} from "./engine/util.mjs";
 import {ReviewScene} from "./scene3d.mjs";
+import {buildRecordingPlan} from "./engine/clip-plan.mjs";
 
 const $ = id => document.getElementById(id);
 const S = {replay: null, detail: null, review: null, round: 0, tick: 0, start: 0, end: 0, playing: false, speed: 1, clip: null, focus: null, player: "", kind: "", lastNote: -1};
@@ -55,6 +56,7 @@ async function use(replay, detail, label) {
   const c = S.review.coverage;
   $("coverage").textContent = c.damage ? `full detail${c.spotted ? " · spotting" : ""}${c.pitch ? " · pitch" : ""}` : "coarse replay: no damage, spotting or pitch data";
   $("save-review").disabled = false;
+  $("export-clips").disabled = !S.review.clips.length;
   const def = mapDefs[replay.map] ?? null;
   const fix = u => u ? "../" + u.replace(/^\.\//, "") : null;
   scene.setMap(def, def ? {upper: fix(def.image), lower: fix(def.lower)} : {});
@@ -117,9 +119,10 @@ function jumpNote(dir) {
 }
 
 // ---------- rendering ----------
+const listedClips = () => S.review.clips.filter(c => (S.player ? c.player === S.player : c.featured) && (!S.kind || c.kind === S.kind || c.kind === "mixed"));
 function renderLists() {
   if (!S.review) return;
-  const clips = S.review.clips.filter(c => (S.player ? c.player === S.player : c.featured) && (!S.kind || c.kind === S.kind || c.kind === "mixed"));
+  const clips = listedClips();
   $("clip-list").innerHTML = clips.length ? clips.map(c => `<button class="clip ${c.kind}${S.clip?.id === c.id ? " active" : ""}" data-clip="${esc(c.id)}"><span class="score">${c.score}</span><b>${esc(c.title)}</b><small>${esc(nameOf(c.player))} · R${c.roundNumber} · ${c.clock} · ${c.notes.length} note${c.notes.length > 1 ? "s" : ""}${c.wpa ? ` · ${c.wpa > 0 ? "+" : ""}${c.wpa}% WPA` : ""}</small></button>`).join("") : `<p class="muted">No clips match this filter.</p>`;
   const rows = S.review.players;
   const r2 = rows.some(p => p.ratings.hltv2 !== null);
@@ -239,6 +242,16 @@ $("save-review").onclick = async () => {
     const a = document.createElement("a"); a.href = URL.createObjectURL(gz); a.download = S.replay.source.replace(/\.(dem|strats|json|scopereview)$/i, "") + ".scopereview"; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 10000); toast("Review saved. Open it here later without re-parsing.", 3000);
   } catch (e) { toast("Save failed: " + e.message); }
+};
+// Recording plan for the clips currently listed; recorder/record-clips.mjs --plan turns it into videos.
+$("export-clips").onclick = () => {
+  const clips = listedClips();
+  if (!clips.length) return toast("No clips match this filter.", 3000);
+  const plan = buildRecordingPlan(S.replay, S.review, clips);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 1)], {type: "application/json"}));
+  a.download = S.replay.source.replace(/\.(dem|strats|json|scopereview)$/i, "") + ".clips.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast(`Exported ${clips.length} clip${clips.length > 1 ? "s" : ""}. Keep the plan next to ${plan.demoFile} and run recorder/record-clips.mjs --plan.`, 5000);
 };
 addEventListener("keydown", e => {
   if (e.target.closest("input,select,textarea")) return;

@@ -15,5 +15,13 @@ Electron: https://github.com/electron/electron (MIT).
 Electron's LICENSE and LICENSES.chromium.html are included with its runtime.
 electron-builder: https://github.com/electron-userland/electron-builder (MIT).
 
+three.js (3D review viewer): https://github.com/mrdoob/three.js (MIT).
+Version: 0.169.0 (r169), vendored as web/vendor/three.module.min.js.
+Full license: web/vendor/three-LICENSE.txt.
+
+The optional clip recorder (recorder/, not part of the packaged app) drives
+separately installed tools: HLAE (https://github.com/advancedfx/advancedfx, MIT),
+OBS Studio (GPL-2.0) and FFmpeg (LGPL/GPL). None of them is bundled.
+
 Parser rebuilt from source with the included wasm-compatibility.patch.
 Details: web/vendor/PARSER_BUILD.md.

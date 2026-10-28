@@ -13,3 +13,4 @@ dist/
 target/
 out/
 .venv/
+recorder/recorder.json
