@@ -11,6 +11,7 @@ import {fileURLToPath, pathToFileURL} from "node:url";
 import {reviewReplay} from "../web/review/engine/review.mjs";
 import {buildRecordingPlan, spectateCommands} from "../web/review/engine/clip-plan.mjs";
 import {Netcon, sleep} from "./netcon.mjs";
+import {VConsole} from "./vconsole.mjs";
 import {Obs} from "./obs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -37,8 +38,11 @@ export const DEFAULTS = {
     // HLAE renders at a fixed frame rate, so playback is slower than realtime; wait seconds * slowFactor.
     slowFactor: 2.5
   },
-  obs: {exe: "", url: "ws://127.0.0.1:4455", password: "", slowFactor: 1},
+  obs: {exe: "", url: "ws://127.0.0.1:4455", password: "", slowFactor: 1, scene: "Strat Scope CS2", source: "CS2 capture", window: "Counter-Strike 2:SDL_app:cs2.exe"},
   ffmpeg: "ffmpeg",
+  // "vconsole" (CS2's VConsole2 port, default) or "netcon" (-netconport; current CS2 builds ignore it).
+  console: "vconsole",
+  vconsolePort: 29000,
   netconPort: 2121,
   width: 1920,
   height: 1080,
@@ -87,6 +91,21 @@ export function readReviewFile(file) {
   const data = JSON.parse((raw[0] === 0x1f && raw[1] === 0x8b ? zlib.gunzipSync(raw) : raw).toString("utf8"));
   if (data.format !== "strat-scope-review" || !data.replay) throw new Error(`${file} is not a .scopereview file`);
   return data;
+}
+
+// Parses a .dem with the bundled WASM parser (same passes as the review UI).
+export async function parseDemFile(file) {
+  const vm = await import("node:vm");
+  const vendor = path.join(HERE, "..", "web", "vendor");
+  const {parseDemo} = await import("../web/parse-demo.mjs"), {createReport} = await import("../web/diagnostics.mjs");
+  const {parseReviewDetail} = await import("../web/review/parse-review.mjs");
+  if (!globalThis.dp) {
+    vm.runInThisContext(fs.readFileSync(path.join(vendor, "demoparser2.js"), "utf8") + ";globalThis.dp=wasm_bindgen;");
+    await globalThis.dp({module_or_path: fs.readFileSync(path.join(vendor, "demoparser2_bg.wasm"))});
+  }
+  const bytes = new Uint8Array(fs.readFileSync(file)), name = path.basename(file);
+  const replay = await parseDemo(bytes, name, globalThis.dp, createReport({name, size: bytes.length}));
+  return {replay, detail: parseReviewDetail(bytes, globalThis.dp, replay)};
 }
 
 // Default: featured clips in score order. --player narrows by name/SteamID, --only by clip id or plan index.
@@ -154,7 +173,14 @@ export function findCs2() {
   }
   return "";
 }
-export const csgoDir = cs2Exe => path.resolve(path.dirname(cs2Exe), "..", "..", "csgo");
+export function findSteam() {
+  try {
+    const out = execFileSync("reg", ["query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamExe"], {encoding: "utf8"});
+    const exe = out.match(/SteamExe\s+REG_SZ\s+(.+)/)?.[1]?.trim();
+    return exe && fs.existsSync(exe) ? path.normalize(exe) : "";
+  } catch { return ""; }
+}
+export const csgoDir =cs2Exe => path.resolve(path.dirname(cs2Exe), "..", "..", "csgo");
 
 function newestFile(dir, since, pattern) {
   let best = null;
@@ -176,9 +202,24 @@ function run(cmd, args, cwd) {
   });
 }
 
+// Creates (once) a scene with a Game Capture of the CS2 window and makes it the program scene.
+export async function ensureObsScene(obs, {scene, source, window}) {
+  const {scenes} = await obs.request("GetSceneList");
+  if (!scenes.some(s => s.sceneName === scene)) await obs.request("CreateScene", {sceneName: scene});
+  const {sceneItems} = await obs.request("GetSceneItemList", {sceneName: scene});
+  if (!sceneItems.some(i => i.sourceName === source)) {
+    const {inputs} = await obs.request("GetInputList");
+    if (inputs.some(i => i.inputName === source)) await obs.request("CreateSceneItem", {sceneName: scene, sourceName: source});
+    else await obs.request("CreateInput", {sceneName: scene, inputName: source, inputKind: "game_capture",
+      inputSettings: {capture_mode: "window", window, capture_cursor: false, capture_audio: true}});
+  }
+  await obs.request("SetCurrentProgramScene", {sceneName: scene});
+}
+
 function launchCommand(cfg) {
-  const game = [...cfg.launchArgs, "-netconport", String(cfg.netconPort), "-w", String(cfg.width), "-h", String(cfg.height)];
-  if (cfg.mode !== "hlae") return {cmd: cfg.cs2, args: game};
+  const game = [...cfg.launchArgs, ...(cfg.console === "netcon" ? ["-netconport", String(cfg.netconPort)] : []), "-w", String(cfg.width), "-h", String(cfg.height)];
+  // Anti-cheat drivers (FACEIT, Vanguard) can deny starting cs2.exe from another process, so go through Steam.
+  if (cfg.mode !== "hlae") return cfg.steam ? {cmd: cfg.steam, args: ["-applaunch", "730", ...game.filter(a => a !== "-steam")]} : {cmd: cfg.cs2, args: game};
   const hook = cfg.hlae.hookDll || path.join(path.dirname(cfg.hlae.exe), "x64", "AfxHookSource2.dll");
   return {cmd: cfg.hlae.exe, args: ["-customLoader", "-noGui", "-autoStart", "-hookDllPath", hook, "-programPath", cfg.cs2, "-cmdLine", game.join(" ")]};
 }
@@ -196,10 +237,12 @@ export async function main(argv = process.argv.slice(2)) {
   if (o.mode) cfg.mode = o.mode;
   if (!["hlae", "obs"].includes(cfg.mode)) throw new Error(`mode must be "hlae" or "obs"`);
   cfg.cs2 ||= findCs2();
+  if (cfg.steam === undefined) cfg.steam = findSteam();
 
   let plan, featured = null, demo = o.demo, baseFile = o.review ?? o.plan;
   if (o.review) {
-    const data = readReviewFile(o.review), review = reviewReplay(data.replay, {detail: data.detail});
+    const data = /\.dem$/i.test(o.review) ? await parseDemFile(o.review) : readReviewFile(o.review), review = reviewReplay(data.replay, {detail: data.detail});
+    if (/\.dem$/i.test(o.review)) demo ||= path.resolve(o.review);
     featured = new Set(review.clips.filter(c => c.featured).map(c => c.id));
     plan = buildRecordingPlan(data.replay, review, review.clips);
   } else plan = JSON.parse(fs.readFileSync(o.plan, "utf8"));
@@ -228,7 +271,7 @@ export async function main(argv = process.argv.slice(2)) {
   const launch = launchCommand(cfg);
   if (o.dryRun) {
     if (!o.noLaunch) say(`\nLaunch: "${launch.cmd}" ${launch.args.map(a => /\s/.test(a) ? `"${a}"` : a).join(" ")}`);
-    say(`Console (netcon 127.0.0.1:${cfg.netconPort}):`);
+    say(`Console (${cfg.console} 127.0.0.1:${cfg.console === "netcon" ? cfg.netconPort : cfg.vconsolePort}):`);
     await sendAll(null, [...cfg.setupCommands, `playdemo ${DEMO_NAME}`], true);
   }
 
@@ -237,14 +280,16 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     if (!o.dryRun) {
       if (problems.length) throw new Error(problems.join("; "));
+      if (cfg.mode === "obs") { obs = new Obs(); await obs.connect(cfg.obs.url, cfg.obs.password); await ensureObsScene(obs, cfg.obs); }
       const dest = path.join(csgoDir(cfg.cs2), `${DEMO_NAME}.dem`);
       fs.copyFileSync(demo, dest); say(`Copied demo to ${dest}`);
       if (!o.noLaunch) { child = spawn(launch.cmd, launch.args, {detached: true, stdio: "ignore"}); child.unref(); say("Launched CS2, waiting for console..."); }
-      con = await new Netcon().connect(cfg.netconPort);
+      con = cfg.console === "netcon" ? await new Netcon().connect(cfg.netconPort) : await new VConsole().connect(cfg.vconsolePort);
       if (!o.noLaunch) await sleep(cfg.startupSeconds * 1000);
-      if (cfg.mode === "obs") { obs = new Obs(); await obs.connect(cfg.obs.url, cfg.obs.password); }
+      const failed = con.waitFor(/Error processing network message|Discarding pending request|Failed to open demo/i, cfg.demoLoadSeconds * 1000);
       await sendAll(con, [...cfg.setupCommands, `playdemo ${DEMO_NAME}`]);
-      await sleep(cfg.demoLoadSeconds * 1000);
+      const why = await failed;
+      if (why) throw new Error(`CS2 cannot play this demo ("${why.trim()}"); it was probably recorded by an older game build`);
     }
     for (const c of clips) {
       const cmd = clipCommands(c, cfg);
@@ -259,8 +304,14 @@ export async function main(argv = process.argv.slice(2)) {
       }
       try {
         await sendAll(con, cmd.seek); await sleep(cfg.settleSeconds * 1000);
+        // Log the tick CS2 reports after the seek so plan ticks can be checked against demo ticks.
+        const at = con.log.length; con.send("demo_info"); await sleep(600);
+        const info = con.log.slice(at).filter(l => /tick/i.test(l)).join(" | ");
+        if (info) say(`    demo_info: ${info.slice(0, 200)}`);
         const since = Date.now() - 1000;
         await sendAll(con, cmd.start); if (obs) await obs.request("StartRecord");
+        // OBS records in realtime, so the paused frames before demo_resume are trimmed off.
+        const lead = cfg.leadSeconds + (obs ? (Date.now() - since - 1000) / 1000 : 0);
         await sendAll(con, cmd.resume); await sleep(c.seconds * slow * 1000 + 500);
         await sendAll(con, cmd.stop);
         let rawSrc = obs ? (await obs.request("StopRecord")).outputPath : null;
@@ -271,8 +322,8 @@ export async function main(argv = process.argv.slice(2)) {
         fs.copyFileSync(rawSrc, path.join(out, rawName));
         const wav = obs ? null : newestFile(cfg.hlae.outputDir, since, /\.wav$/i), audioName = wav ? `${c.file}.raw.wav` : null;
         if (wav) fs.copyFileSync(wav, path.join(out, audioName));
-        say(`    raw: ${rawSrc}${wav ? ` + ${path.basename(wav)}` : ""}`);
-        await run(cfg.ffmpeg, ffmpegArgs(c, rawName, cfg, {burn: o.burn, audioName}), out);
+        say(`    raw: ${rawSrc}${wav ? ` + ${path.basename(wav)}` : ""} (lead ${lead.toFixed(2)}s)`);
+        await run(cfg.ffmpeg, ffmpegArgs(c, rawName, cfg, {burn: o.burn, audioName, lead}), out);
         results.set(c.id, {video: path.join(out, `${c.file}.mp4`)}); say(`    ok -> ${c.file}.mp4`);
       } catch (e) { results.set(c.id, {error: e.message}); say(`    FAILED: ${e.message} (subtitles kept as ${c.file}.srt)`); }
     }
