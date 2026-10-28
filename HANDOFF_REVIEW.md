@@ -27,18 +27,32 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
 - Docs: `web/review/README.md`, `recorder/README.md`, README feature list/links, THIRD_PARTY_NOTICES
   (three.js 0.169.0 MIT; HLAE/OBS/FFmpeg not bundled), `web/vendor/sources.json` (three), AGENTS commands.
 
+## Live CS2 findings (2026-10-28)
+- CS2 rewrites `-netconport` to `xnetconport` (disabled). The recorder now uses VConsole2 on 127.0.0.1:29000
+  (`recorder/vconsole.mjs`; header = type, uint16 version 0xd4, uint32 length, uint16 handle; PRNT text at +28).
+  Verified: commands execute and console text comes back.
+- FACEIT AC + Riot Vanguard (vgk) are installed: HLAE injection and spawning cs2.exe fail (error 5 / EPERM).
+  Frank chose OBS mode (`recorder/recorder.json` mode "obs", WebSocket password there, Git-ignored).
+  OBS mode launches via `steam.exe -applaunch 730`; Steam asks to confirm custom launch args.
+- Recorder auto-creates OBS scene "Strat Scope CS2" with a Game Capture of the CS2 window.
+- CS2 updated on 2026-10-28 to 1.41.9.3 (patch 14193). It refuses older demos ("Error processing network message
+  CSVCMsg_ServerInfo"): public-test.dem (13984) and the FACEIT demos in Downloads\demos\28_10 (14189) all fail.
+  The recorder now detects this and aborts with a clear error.
+- `--review` accepts a `.dem` directly (parsed with the bundled WASM parser).
+
 ## Tools on this PC
 - CS2: `C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe`.
-- ffmpeg 8.0.1 (gyan.dev, libass) on PATH via WinGet. OBS: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`.
-- HLAE: NOT installed. Source: https://github.com/advancedfx/advancedfx/releases.
+- ffmpeg 8.0.1 (gyan.dev, libass) via WinGet. OBS: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`.
+- HLAE 2.192.10 at `C:\Users\timot\Tools\HLAE` (ffmpeg.ini points to the WinGet ffmpeg); unusable while
+  FACEIT/Vanguard drivers run.
 - `node` is not on PATH; use the Codex runtime node (see AGENTS.md).
 
 ## Next steps
-1. Real recording run of the top 2 clips. Needs Frank's go-ahead before CS2 starts, and either HLAE
-   installed (set `hlae.exe` in `recorder/recorder.json`) or OBS mode with the WebSocket server enabled.
-2. During that run, verify the open questions: parser tick == `demo_gototick` tick; whether gototick keeps
-   the pause (script re-sends `demo_pause`); HLAE output layout (script takes newest video under
-   `hlae.outputDir`); HLAE launch flags; `slowFactor`/`leadSeconds` values; `mirv_cmd addAtTick`.
+1. Real recording run needs a demo recorded on CS2 patch >= 14193 (any match played/downloaded after the
+   2026-10-28 update). Then: `node recorder/record-clips.mjs --review <new>.dem --top 2` (ask Frank before
+   starting CS2; Steam must be running; accept Steam's launch-args prompt).
+2. During that run, verify: parser tick == `demo_gototick` tick (recorder logs `demo_info` after each seek);
+   whether gototick keeps the pause; OBS lead trim; subtitle timing against the video.
 3. Regenerate `verification/package-manifest.json` with a local build + `verify-package` (web/ changed).
 4. Tune: spotting lags real visibility; win-probability coefficients are hand-set; "isolated" fires often
    on CT anchors.

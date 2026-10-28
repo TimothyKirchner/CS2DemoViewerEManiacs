@@ -250,7 +250,7 @@ export async function main(argv = process.argv.slice(2)) {
   demo ||= path.resolve(path.dirname(baseFile), path.basename(plan.demoFile ?? ""));
   const clips = selectClips(plan, o, featured);
   if (!clips.length) throw new Error("No clips selected (try --all or --player)");
-  const out = path.resolve(o.out ?? baseFile.replace(/\.(scopereview|json)$/i, "") + "-clips");
+  const out = path.resolve(o.out ?? baseFile.replace(/\.(scopereview|json|dem)$/i, "") + "-clips");
   cfg.hlae.outputDir ||= path.join(out, "hlae-raw");
 
   say(`Strat Scope recorder · ${cfg.mode.toUpperCase()}${o.dryRun ? " · dry run" : ""}`);
@@ -286,7 +286,7 @@ export async function main(argv = process.argv.slice(2)) {
       if (!o.noLaunch) { child = spawn(launch.cmd, launch.args, {detached: true, stdio: "ignore"}); child.unref(); say("Launched CS2, waiting for console..."); }
       con = cfg.console === "netcon" ? await new Netcon().connect(cfg.netconPort) : await new VConsole().connect(cfg.vconsolePort);
       if (!o.noLaunch) await sleep(cfg.startupSeconds * 1000);
-      const failed = con.waitFor(/Error processing network message|Discarding pending request|Failed to open demo/i, cfg.demoLoadSeconds * 1000);
+      const failed = con.waitFor(/Error processing network message|Discarding pending request 'Playing Demo|Failed to open demo/i, cfg.demoLoadSeconds * 1000);
       await sendAll(con, [...cfg.setupCommands, `playdemo ${DEMO_NAME}`]);
       const why = await failed;
       if (why) throw new Error(`CS2 cannot play this demo ("${why.trim()}"); it was probably recorded by an older game build`);

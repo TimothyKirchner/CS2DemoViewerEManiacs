@@ -3,7 +3,7 @@ _Updated 2026-10-28 (migrated verbatim from ../HANDOFF_CURRENT.md of 2026-10-26)
 
 ## Current task
 Automated review + recorded clips in progress on branch claude/cs2-demo-3d-review-1tkt4m: see HANDOFF_REVIEW.md.
-2026-10-28: recorder works over CS2 VConsole2 + OBS (HLAE blocked by FACEIT/Vanguard). First real recording run in progress; 1.2.0 work still uncommitted on top of the branch.
+2026-10-28: recorder works over CS2 VConsole2 + OBS (HLAE blocked by FACEIT/Vanguard). Real recording blocked: today's CS2 update (patch 14193) refuses all older demos; needs a demo recorded after the update. 1.2.0 work still uncommitted on top of the branch.
 No active work remains from the requested local feature expansion. Version 1.2.0 implemented and locally built; parent contains Strat-Scope-1.2.0-Windows-x64.exe and Strat-Scope-1.2.0-Source.zip. Executable copy SHA-256 verified; ZIP byte-verified.
 
 ## Done
