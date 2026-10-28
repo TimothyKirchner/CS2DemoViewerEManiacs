@@ -53,6 +53,10 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
    which keeps up to 10 clips for him and records all of them. Run:
    `node recorder/record-clips.mjs --review <new>.dem` (ask Frank before starting CS2; Steam must be running;
    accept Steam's launch-args prompt). The demos in Downloads\demos\28_10 are scouting demos without him.
+   No public post-update demo existed yet on 2026-10-29 00:00 (last HLTV match started before the build).
+   `recorder/bot-demo.mjs` can record a local bot match instead, but CS2 only opened VConsole (29000) when
+   launched with `-console` (plus Frank's own launch options); `steam -applaunch 730 -console` triggers a Steam
+   prompt that needs a click. NEVER queue/join real games (vconsole.mjs refuses online commands).
 2. During that run, verify: parser tick == `demo_gototick` tick (recorder logs `demo_info` after each seek);
    whether gototick keeps the pause; OBS lead trim; subtitle timing against the video.
 3. Regenerate `verification/package-manifest.json` with a local build + `verify-package` (web/ changed).

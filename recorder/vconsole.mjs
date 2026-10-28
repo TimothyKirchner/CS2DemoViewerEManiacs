@@ -23,7 +23,10 @@ export function decodePackets(buf) {
   }
   return {packets, rest: buf};
 }
-export const printText = body => body.subarray(PRNT_TEXT).toString("utf8").replace(/\0[\s\S]*$/, "").trimEnd();
+// Never queue or join real games (matchmaking, Premier, FACEIT, community servers) from automation.
+const ONLINE = /^\s*(connect|retry|redirect|password|mm_|matchmaking|party|lobby|queue|playcast|gameui_activate|sv_lan\s+0)/i;
+export const isOnlineCommand = command => String(command).split(";").some(c => ONLINE.test(c));
+export const printText =body => body.subarray(PRNT_TEXT).toString("utf8").replace(/\0[\s\S]*$/, "").trimEnd();
 
 export class VConsole {
   constructor() { this.buffer = Buffer.alloc(0); this.waiters = []; this.log = []; }
@@ -49,7 +52,11 @@ export class VConsole {
       });
     });
   }
-  send(command) { if (!this.socket) throw new Error("Console not connected"); this.socket.write(encodeCommand(command)); }
+  send(command) {
+    if (!this.socket) throw new Error("Console not connected");
+    if (isOnlineCommand(command)) throw new Error(`Refusing online command "${command}": the recorder only plays demos and local maps`);
+    this.socket.write(encodeCommand(command));
+  }
   waitFor(re, timeoutMs) {
     return new Promise(resolve => {
       const w = {re, resolve}; this.waiters.push(w);

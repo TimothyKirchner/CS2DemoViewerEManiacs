@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {encodeCommand, decodePackets, printText} from "../recorder/vconsole.mjs";
+import {encodeCommand, decodePackets, printText, isOnlineCommand} from "../recorder/vconsole.mjs";
+
+test("online and matchmaking commands are refused", () => {
+  for (const c of ["connect 1.2.3.4", "volume 1; connect x", "mm_queue", "retry", "playcast http://x"]) assert.ok(isOnlineCommand(c), c);
+  for (const c of ["map de_mirage", "playdemo x", "demo_gototick 5", "spec_mode 1", "disconnect", "bot_quota 10"]) assert.ok(!isOnlineCommand(c), c);
+});
 
 const packet = (type, body, version = 0xd4) => {
   const head = Buffer.alloc(12); head.write(type, 0, "latin1"); head.writeUInt16BE(version, 4); head.writeUInt32BE(12 + body.length, 6);
