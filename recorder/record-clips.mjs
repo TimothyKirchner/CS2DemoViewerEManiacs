@@ -29,7 +29,8 @@ export const DEFAULTS = {
       "mirv_streams record name \"{outputDir}\"",
       "mirv_streams record fps {fps}",
       "mirv_streams record screen enabled 1",
-      "mirv_streams record screen settings afxFfmpegYuv420p",
+      "mirv_streams settings edit afxDefault settings afxFfmpegYuv420p",
+      "mirv_streams record startMovieWav 1",
       "mirv_streams record start"
     ],
     recordEnd: ["mirv_streams record end"],
@@ -112,10 +113,12 @@ export function clipCommands(clip, cfg, mode = cfg.mode) {
   };
 }
 
-export function ffmpegArgs(clip, rawName, cfg, {burn = true, lead = cfg.leadSeconds} = {}) {
-  const args = ["-y", "-hide_banner", "-loglevel", "error"];
-  if (lead > 0) args.push("-ss", String(lead));
-  args.push("-i", rawName, "-t", String(clip.seconds));
+// HLAE writes game audio as a separate .wav next to the video; pass it as audioName to mux it back in.
+export function ffmpegArgs(clip, rawName, cfg, {burn = true, lead = cfg.leadSeconds, audioName = null} = {}) {
+  const args = ["-y", "-hide_banner", "-loglevel", "error"], seek = lead > 0 ? ["-ss", String(lead)] : [];
+  args.push(...seek, "-i", rawName);
+  if (audioName) args.push(...seek, "-i", audioName, "-map", "0:v:0", "-map", "1:a:0");
+  args.push("-t", String(clip.seconds));
   if (burn) args.push("-vf", `subtitles=${clip.file}.srt:force_style='${cfg.burnStyle}'`);
   args.push("-c:v", "libx264", "-preset", "veryfast", "-crf", String(cfg.crf), "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", `${clip.file}.mp4`);
   return args;
@@ -153,12 +156,12 @@ export function findCs2() {
 }
 export const csgoDir = cs2Exe => path.resolve(path.dirname(cs2Exe), "..", "..", "csgo");
 
-function newestVideo(dir, since) {
+function newestFile(dir, since, pattern) {
   let best = null;
   const walk = d => { for (const e of fs.readdirSync(d, {withFileTypes: true})) {
     const p = path.join(d, e.name);
     if (e.isDirectory()) walk(p);
-    else if (VIDEO_EXT.test(e.name)) { const t = fs.statSync(p).mtimeMs; if (t >= since && (!best || t > best.t)) best = {p, t}; }
+    else if (pattern.test(e.name)) { const t = fs.statSync(p).mtimeMs; if (t >= since && (!best || t > best.t)) best = {p, t}; }
   } };
   if (fs.existsSync(dir)) walk(dir);
   return best?.p ?? null;
@@ -262,11 +265,14 @@ export async function main(argv = process.argv.slice(2)) {
         await sendAll(con, cmd.stop);
         let rawSrc = obs ? (await obs.request("StopRecord")).outputPath : null;
         await sleep(3000);
-        rawSrc ??= newestVideo(cfg.hlae.outputDir, since);
+        rawSrc ??= newestFile(cfg.hlae.outputDir, since, VIDEO_EXT);
         if (!rawSrc) throw new Error(`no video found in ${cfg.mode === "hlae" ? cfg.hlae.outputDir : "OBS output"}`);
         const rawName = `${c.file}.raw${path.extname(rawSrc)}`;
         fs.copyFileSync(rawSrc, path.join(out, rawName));
-        await run(cfg.ffmpeg, ffmpegArgs(c, rawName, cfg, {burn: o.burn}), out);
+        const wav = obs ? null : newestFile(cfg.hlae.outputDir, since, /\.wav$/i), audioName = wav ? `${c.file}.raw.wav` : null;
+        if (wav) fs.copyFileSync(wav, path.join(out, audioName));
+        say(`    raw: ${rawSrc}${wav ? ` + ${path.basename(wav)}` : ""}`);
+        await run(cfg.ffmpeg, ffmpegArgs(c, rawName, cfg, {burn: o.burn, audioName}), out);
         results.set(c.id, {video: path.join(out, `${c.file}.mp4`)}); say(`    ok -> ${c.file}.mp4`);
       } catch (e) { results.set(c.id, {error: e.message}); say(`    FAILED: ${e.message} (subtitles kept as ${c.file}.srt)`); }
     }

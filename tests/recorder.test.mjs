@@ -44,5 +44,7 @@ test("ffmpeg trims to the clip and burns relative subtitles", () => {
   assert.deepEqual(args.slice(args.indexOf("-ss"), args.indexOf("-ss") + 6), ["-ss", "0.5", "-i", "raw.mp4", "-t", "10"]);
   assert.match(args[args.indexOf("-vf") + 1], /^subtitles=01_R3_Ann_Missed_trade\.srt:force_style=/);
   assert.ok(!ffmpegArgs(plan.clips[0], "raw.mp4", loadConfig(null), {burn: false}).includes("-vf"));
+  const muxed = ffmpegArgs(plan.clips[0], "raw.mp4", loadConfig(null), {lead: 0.5, audioName: "raw.wav"}).join(" ");
+  assert.match(muxed, /-ss 0\.5 -i raw\.mp4 -ss 0\.5 -i raw\.wav -map 0:v:0 -map 1:a:0 -t 10/);
   assert.match(clipsIndex(plan, plan.clips, new Map([["b", {error: "no video"}]])), /not recorded \(no video\)[\s\S]*Stay within trade distance/);
 });
