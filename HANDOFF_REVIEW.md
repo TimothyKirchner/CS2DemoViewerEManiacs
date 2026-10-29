@@ -52,8 +52,8 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
 - Retest 2026-10-29 20:16-20:20, same build (steam.inf 1.41.9.3, unchanged since 10-28 23:41), second demo
   (FACEIT de_cache): 3 runs, all crash with an access violation ~25 s after launch (dumps 201647, 201842,
   201948). Removing `-allow_third_party_software` (args `-insecure -console -novid`) changes nothing, so it
-  is not demo-specific and not that flag. Untested: FACEIT client closed (closing it was refused by the
-  agent permission guard; Frank can close it by hand before a run).
+  is not demo-specific and not that flag. A 4th run with the FACEIT client closed (service still running)
+  crashed the same way (dump 202229), so the FACEIT app is not the cause either.
 - Options: retest after the next CS2 patch; key-bound cfg files without the console (needs synthetic input,
   check anti-cheat risk first); HLAE route (needs FACEIT/Vanguard off and also uses -insecure, so likely same crash).
 
