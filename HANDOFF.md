@@ -1,20 +1,20 @@
 # HANDOFF
-<!-- auto: written by local LLM from transcript tail; verify before trusting -->
-_Updated 2026-10-29T00:01:12+00:00 (claude session 4f8374b4)_
-
-_Updated 2026-10-29_
+_Updated 2026-10-29 08:05 (claude session 4f8374b4)_
 
 ## Current task
-Automated review + recorded clips in progress on branch `claude/cs2-demo-3d-review-1tkt4m`. Bot-match demo run failed (status: `failed`). Test run for clips stopped for tonight. PC will shut down after tonight's hub automation (scheduled for 03:00). User to provide demo tomorrow.
+Automated review + recorded clips on branch `claude/cs2-demo-3d-review-1tkt4m` (pushed, head a3b6b48).
+Details in HANDOFF_REVIEW.md. BLOCKED: CS2's console (VConsole, port 29000) needs `-insecure`, and with
+`-insecure` CS2 crashes during demo playback since the 2026-10-28 update (patch 14193). No clip with game
+footage recorded yet. Needs Frank's decision on the next approach; do not start CS2 without asking him.
 
 ## Done
-- 1.2.0 work committed as `6a71947` (not pushed). Handoff for manager updated.
-- Shutdown watcher started at 00:13, checks every 5 minutes; will run by 09:00 at latest (with 2-min Windows warning).
-- Bot-match demo started (Mirage, 10 bots, 6 rounds at 3× speed) but failed.
+- Review engine, 3D viewer, Export clips button, recorder (OBS mode, VConsole, player focus, .dem input), docs.
+- Unit tests 85/85. Recorder refuses online/matchmaking commands; never queue or join real games.
+- Frank is "Kampu" (SteamID64 76561198083553699); recorder.json focuses on him (Git-ignored file).
 
 ## Next steps
-- User to produce demo tomorrow (after CS2 update) and run `node recorder/record-clips.mjs --review <demo>.dem` to record clips.
-- Shutdown: PC will shut down after tonight's hub automation (by 09:00 at latest).
+- Retest after the next CS2 patch, or choose another control method (see HANDOFF_REVIEW.md "Blocker").
+- The local 1.2.0 work is still UNCOMMITTED in the working tree; commit only when Frank asks.
 
 ## Open issues
 - Genuine POV/current ESEA/multi-map fidelity not exhaustively tested. Unknown visibility restricts outcome/damage stats. Roles/patterns are heuristics; veto is manual. Utility geometry remains approximate.
