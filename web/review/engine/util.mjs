@@ -2,6 +2,8 @@
 export const EYE_HEIGHT = 64, DUCK_EYE_HEIGHT = 46;
 export const ROUND_SECONDS = 115, BOMB_SECONDS = 40;
 
+// CS2 demos report the round winner as "T"/"CT"; older data uses team numbers 2/3. Returns 2, 3 or null.
+export const winnerTeam = w => w === 2 || w === "2" || w === "T" ? 2 : w === 3 || w === "3" || w === "CT" ? 3 : null;
 export const key = s => String(s ?? "").toLowerCase().replace(/^weapon_/, "").replace(/[^a-z0-9]/g, "");
 // Approximate CS2 retail prices (USD in-game). Used only for equipment-value context.
 const PRICES = {

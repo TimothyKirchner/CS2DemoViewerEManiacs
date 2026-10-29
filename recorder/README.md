@@ -34,6 +34,28 @@ node recorder/record-clips.mjs --plan ../match.clips.json --mode obs
 Output goes to `<input>-clips/`: `NN_R<round>_<player>_<finding>.mp4`, its `.srt`, the raw capture and
 `clips.md` with every critique.
 
+## Instructive rounds for one player
+
+```sh
+node scripts/instructive-rounds.mjs ../match.dem
+node scripts/instructive-rounds.mjs C:\Users\<you>\Documents\CS2Demos\faceit --max 6
+node recorder/record-clips.mjs --plan review-out/<demo>.plan.json --demo <unpacked .dem> --dry-run
+```
+
+- Takes `.dem`, `.dem.zst` (FACEIT) and `.dem.gz` files or folders of them. Compressed demos are unpacked
+  once to `%TEMP%\strat-scope-demos` (`--cache` to change; folders inside the repository are refused).
+- Focus player: `--player <SteamID64|name>`, default `"player"` from `recorder.json`.
+- Per demo it writes `<demo>.rounds.json`, `<demo>.plan.json` (a normal recording plan, one clip per window)
+  and `<demo>.md` to the Git-ignored `review-out/` (`--out` to change). The report prints the record command.
+- Picks up to `--max` (8) rounds ranked by an instructive score, keeping at least two mistakes and two good
+  examples when the match has them. Clip windows run `--lead` (6) s before and `--tail` (3) s after each key
+  moment and merge when they overlap. Times are demo ticks, demo seconds (tick / tick rate) and mm:ss.
+- Detected: opening death (lost/won round), opening kill, untraded death, multi-kill, clutch won/lost (1vN),
+  post-plant and retake won/lost (alive at the plant), saved weapon, buying alone/under-buying versus the
+  team, plus the review engine's findings (unused utility, no-save, missed trade, isolation, re-peek, team
+  flash, crosshair, moving shots, trades, flash assists). Every category carries a confidence: high = game
+  events, medium = sampled positions/inventories, low = judgement call (economy, saves, isolation).
+
 ## Your CS2 settings stay untouched
 
 - CS2 starts with `-insecure -allow_third_party_software -console -novid` added to your own Steam launch

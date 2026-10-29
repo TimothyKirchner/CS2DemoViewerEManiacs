@@ -21,6 +21,8 @@ Global rules: `C:\Users\timot\Desktop\AIOverseer\AGENTS.md`. Read `HANDOFF.md` f
 - Real-demo review: `node tests/review-real-demo.mjs ../public-test.dem --write ../public-test.scopereview`
 - Clip recorder: `node recorder/record-clips.mjs --review ../public-test.scopereview --top 2 --dry-run`
   (drop `--dry-run` to start CS2; ask Frank first). Setup in recorder/README.md.
+- Instructive rounds (focus player, clip timestamps, no CS2): `node scripts/instructive-rounds.mjs <demo|folder>...`
+  (.dem/.dem.zst/.dem.gz; output in Git-ignored review-out/, see recorder/README.md).
 - `node` is not on PATH here; use C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe.
 - Package check: `node scripts/verify-package.cjs`
 - Local build: `node .smoke-profile/build-local.cjs` (existing local build helper; publish never)

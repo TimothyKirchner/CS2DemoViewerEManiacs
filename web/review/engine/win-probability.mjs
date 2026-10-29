@@ -1,6 +1,6 @@
 // Heuristic round win-probability model used to value every kill, plant and defuse.
 // Coefficients are local, inspectable estimates (see web/review/README.md), not fitted to a dataset.
-import {ROUND_SECONDS, BOMB_SECONDS, clamp, equipmentValue, frameBefore} from "./util.mjs";
+import {ROUND_SECONDS, BOMB_SECONDS, clamp, equipmentValue, frameBefore, winnerTeam} from "./util.mjs";
 
 const logistic = x => 1 / (1 + Math.exp(-x));
 // state: {tAlive, ctAlive, planted, secondsLeft, bombSecondsLeft, tEquip, ctEquip, ctKit}
@@ -63,6 +63,6 @@ export function roundTimeline(round, rate) {
     points.push({tick: e.tick, event: e, before, after});
     last = after;
   }
-  const result = round.winner === 2 || round.winner === "2" ? 1 : round.winner === 3 || round.winner === "3" ? 0 : null;
+  const result = winnerTeam(round.winner) === 2 ? 1 : winnerTeam(round.winner) === 3 ? 0 : null;
   return {start: p0, points, end: result ?? last};
 }

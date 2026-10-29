@@ -1,5 +1,5 @@
 // Decision-making heuristics. Every finding cites its tick, players and the measured evidence.
-import {dist, frameBefore, grenadeCount, primaryValue, clock, NON_GUN} from "./util.mjs";
+import {dist, frameBefore, grenadeCount, primaryValue, clock, NON_GUN, winnerTeam} from "./util.mjs";
 
 const TRADE_SECONDS = 5, TRADE_RANGE = 700, SEEN_TRADE_RANGE = 1400, ISOLATION = 1150, FLASH_SUPPORT = 4;
 const sev = {low: 1, medium: 2, high: 3};
@@ -90,7 +90,7 @@ function multiKillsAndClutches({replay, index, timeline}, deaths, add) {
     const living = aliveAt(round, d.tick + 1, dead);
     for (const side of [2, 3]) {
       const mine = living.filter(p => p.team === side), theirs = living.filter(p => p.team !== side);
-      if (mine.length === 1 && theirs.length >= 2 && Number(round.winner) === side) {
+      if (mine.length === 1 && theirs.length >= 2 && winnerTeam(round.winner) === side) {
         const id = mine[0].id;
         if (!clutched.has(id)) { clutched.add(id); add({player: id, tick: d.tick, endTick: round.end, related: theirs.map(p => p.id), kind: "highlight", type: "clutch", severity: theirs.length >= 3 ? 3 : 2, title: `Won a 1v${theirs.length} clutch`, detail: `Last player alive against ${theirs.length} and won the round.`}); }
       }

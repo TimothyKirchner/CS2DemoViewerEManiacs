@@ -14,3 +14,8 @@ target/
 out/
 .venv/
 recorder/recorder.json
+# demos (compressed FACEIT downloads) and instructive-round reports contain personal data
+*.dem.zst
+*.dem.gz
+*.zst
+review-out/
