@@ -117,3 +117,29 @@ test('round winners given as "T"/"CT" (CS2 demos) map to team numbers', async ()
   const {winnerTeam} = await import('../web/review/engine/util.mjs');
   assert.deepEqual(['T', 'CT', 2, 3, '2', '3', null, 'x'].map(winnerTeam), [2, 3, 2, 3, 2, 3, null, null]);
 });
+
+test('match summary scores the match from the focus player side and writes jump commands', async () => {
+  const {matchSummary} = await import('../web/review/engine/match-summary.mjs');
+  const frame = team => ({tick: 0, players: [{id: '1', team}]});
+  const replay = {map: 'de_test', tickRate: 64, players: [{id: '1', name: 'Me'}],
+    rounds: [{number: 1, live: 100, end: 900, winner: 'T', frames: [frame(2)], events: []},
+             {number: 2, live: 1000, end: 1900, winner: 'T', frames: [frame(3)], events: []}]};
+  const result = {player: {steamId: '1'}, picks: [{round: 1, roundNumber: 2, side: 'CT', won: false, kind: 'mistake', category: 'x',
+    title: 'X', confidence: 'high', why: 'w', lookAt: 'l', keyTick: 1200, keyClock: '0:18', roundClock: '1:52', categories: [{type: 'x'}]}]};
+  const s = matchSummary(replay, {players: [], findings: []}, result);
+  assert.deepEqual([s.score, s.result, s.sides.T.won, s.sides.CT.lost], [{us: 1, them: 1}, 'draw', 1, 1]);
+  assert.equal(s.review[0].command, 'demo_gototick 1000');  // 8 s before 1200 would be before the round went live
+});
+
+test('scoreboard counts exit frags but not deaths after the final round', async () => {
+  const {boxScore} = await import('../web/review/engine/rating.mjs');
+  const frame = {tick: 0, players: [{id: '1', team: 2}, {id: '2', team: 3}]};
+  const death = (tick, killer, victim) => ({event_name: 'player_death', tick, attacker_steamid: killer, user_steamid: victim,
+    attacker_team_num: killer === '1' ? 2 : killer === '2' ? 3 : undefined, user_team_num: victim === '1' ? 2 : 3});
+  const replay = {tickRate: 64, rounds: [
+    {live: 100, end: 1000, eventEnd: 1448, frames: [frame], events: [], postRoundEvents: [death(1200, '1', '2')]},   // exit frag
+    {live: 2000, end: 3000, eventEnd: 3500, frames: [frame], events: [], postRoundEvents: [death(3100, null, '1')]}   // post-match suicide
+  ]};
+  const s = boxScore(replay, null);
+  assert.deepEqual([s.get('1').kills, s.get('2').deaths, s.get('1').deaths], [1, 1, 0]);
+});

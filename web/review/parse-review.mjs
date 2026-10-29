@@ -1,14 +1,16 @@
 // Second parser pass for the automated review: damage, shot angles/speeds and dense samples around fights.
 // The viewer's parse (web/parse-demo.mjs) is reused unchanged for the base replay.
 import {plain} from "../core.mjs";
+import {postRoundEnd} from "./engine/util.mjs";
 
 export const DETAIL_VERSION = 1;
 const EVENT_PROPS = ["X", "Y", "Z", "yaw", "pitch", "team_num", "velocity_X", "velocity_Y"];
 const FINE_PROPS = ["X", "Y", "Z", "yaw", "pitch", "velocity_X", "velocity_Y", "velocity_Z", "health", "is_alive", "team_num", "ducking", "is_scoped", "approximate_spotted_by"];
 const LEAD_SECONDS = 3, TAIL_SECONDS = 0.25, STEP = 2;
 
-function roundIndexer(rounds) {
-  return tick => { for (let i = 0; i < rounds.length; i++) if (tick >= rounds[i].start && tick <= rounds[i].end) return i; return -1; };
+function roundIndexer(rounds, rate = 64) {
+  // Up to eventEnd: damage dealt after round_end (exit frags) still counts on the official scoreboard.
+  return tick => { for (let i = 0; i < rounds.length; i++) if (tick >= rounds[i].start && tick <= postRoundEnd(rounds[i], rate, i === rounds.length - 1)) return i; return -1; };
 }
 const id = v => v === undefined || v === null || String(v) === "0" ? null : String(v);
 
@@ -29,7 +31,7 @@ function tryParse(attempts) {
 }
 
 export function parseReviewDetail(bytes, parser, replay, onProgress = () => {}) {
-  const index = roundIndexer(replay.rounds), warnings = [];
+  const index = roundIndexer(replay.rounds, replay.tickRate), warnings = [];
   onProgress({stage: "Reading damage and shot angles", pct: 0});
   const evs = tryParse([
     [() => plain(parser.parseEvents(bytes, ["player_hurt", "weapon_fire"], EVENT_PROPS, ["is_warmup_period"])), "full"],

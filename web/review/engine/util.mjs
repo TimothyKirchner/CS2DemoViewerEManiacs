@@ -2,6 +2,11 @@
 export const EYE_HEIGHT = 64, DUCK_EYE_HEIGHT = 46;
 export const ROUND_SECONDS = 115, BOMB_SECONDS = 40;
 
+// Exit frags land in the ~7 s restart delay after round_end; the last round has no official end, so cap
+// the post-round window. After the final round the match is over and the scoreboard is frozen, so it gets none
+// (keeps post-match suicides and disconnect kills off the scoreboard).
+export const POST_ROUND_SECONDS = 10;
+export const postRoundEnd = (round, rate, last = false) => last ? round.end : Math.min(Math.max(round.end, round.eventEnd ?? round.end), round.end + POST_ROUND_SECONDS * rate);
 // CS2 demos report the round winner as "T"/"CT"; older data uses team numbers 2/3. Returns 2, 3 or null.
 export const winnerTeam = w => w === 2 || w === "2" || w === "T" ? 2 : w === 3 || w === "3" || w === "CT" ? 3 : null;
 export const key = s => String(s ?? "").toLowerCase().replace(/^weapon_/, "").replace(/[^a-z0-9]/g, "");

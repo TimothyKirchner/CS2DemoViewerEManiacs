@@ -1,6 +1,6 @@
 // Box-score stats, public HLTV 1.0 formula, community HLTV 2.0 approximation,
 // win-probability impact (WPA) and the composite Scope Rating.
-import {frameBefore, isGun, clamp, round2} from "./util.mjs";
+import {frameBefore, isGun, clamp, round2, postRoundEnd} from "./util.mjs";
 
 const TRADE_SECONDS = 5;
 export function teamOf(round, id) { return frameBefore(round.frames, round.live)?.players.find(p => p.id === id)?.team ?? null; }
@@ -10,7 +10,8 @@ export function boxScore(replay, detail) {
   const get = id => { id = String(id); if (!stats.has(id)) stats.set(id, {id, rounds: 0, kills: 0, deaths: 0, assists: 0, hsKills: 0, damage: 0, utilDamage: 0, kastRounds: 0, multi: [0, 0, 0, 0, 0, 0], openingKills: 0, openingDeaths: 0, tradeKills: 0, tradedDeaths: 0, enemyFlashSeconds: 0, teamFlashSeconds: 0, flashAssists: 0, survived: 0}); return stats.get(id); };
   replay.rounds.forEach((round, index) => {
     const roster = (frameBefore(round.frames, round.live)?.players ?? []).filter(p => p.team === 2 || p.team === 3);
-    const deaths = round.events.filter(e => e.event_name === "player_death" && e.tick >= round.live);
+    // Exit frags after round_end count on the official scoreboard (core keeps them in postRoundEvents).
+    const deaths = [...round.events, ...(round.postRoundEvents ?? [])].filter(e => e.event_name === "player_death" && e.tick >= round.live && e.tick <= postRoundEnd(round, rate, index === replay.rounds.length - 1));
     const kast = new Set(), kills = new Map();
     for (const p of roster) get(p.id).rounds++;
     deaths.forEach((d, n) => {

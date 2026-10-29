@@ -11,6 +11,7 @@ import {execFileSync} from "node:child_process";
 import {fileURLToPath, pathToFileURL} from "node:url";
 import {reviewReplay} from "../web/review/engine/review.mjs";
 import {instructiveRounds, instructivePlan, instructiveMarkdown, findPlayer} from "../web/review/engine/instructive.mjs";
+import {matchSummary} from "../web/review/engine/match-summary.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DEMO = /\.dem(\.zst|\.gz)?$/i;
@@ -76,10 +77,11 @@ export async function analyzeDemo(file, o) {
   const result = {...instructiveRounds(replay, review, {...opts, player: player.id}), source: path.resolve(file), demoFile: dem};
   const plan = instructivePlan(replay, result, {demoFile: dem});
   fs.mkdirSync(o.out, {recursive: true});
-  const files = {json: path.join(o.out, `${base}.rounds.json`), plan: path.join(o.out, `${base}.plan.json`), md: path.join(o.out, `${base}.md`)};
+  const files = {json: path.join(o.out, `${base}.rounds.json`), plan: path.join(o.out, `${base}.plan.json`), md: path.join(o.out, `${base}.md`), match: path.join(o.out, `${base}.match.json`)};
   fs.writeFileSync(files.json, JSON.stringify({...result, plan}, null, 1));
   fs.writeFileSync(files.plan, JSON.stringify(plan, null, 1));
   fs.writeFileSync(files.md, instructiveMarkdown(result, {demo: dem, plan: files.plan}));
+  fs.writeFileSync(files.match, JSON.stringify({...matchSummary(replay, review, result), source: path.resolve(file), demoFile: dem, analyzedAt: new Date().toISOString()}, null, 1));
   return {result, files};
 }
 
