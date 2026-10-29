@@ -68,7 +68,7 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
 - `node` is not on PATH; use the Codex runtime node (see AGENTS.md).
 
 ## Next steps
-1. Frank (in-game "Kampu", SteamID64 76561198083553699) will produce a post-update demo (CS2 patch >= 14193)
+1. Frank (player id in the Git-ignored recorder/recorder.json) will produce a post-update demo (CS2 patch >= 14193)
    on 2026-10-29. Recordings focus only on him: `recorder/recorder.json` has `"player"` set to his SteamID,
    which keeps up to 10 clips for him and records all of them. Run:
    `node recorder/record-clips.mjs --review <new>.dem` (ask Frank before starting CS2; Steam must be running;
