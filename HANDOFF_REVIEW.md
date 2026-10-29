@@ -49,6 +49,11 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
 - First OBS run produced 10 black clips because CS2 had already crashed; recorder now aborts on a lost console.
 - OBS: Game Capture stayed black; now Window Capture (WGC) matched by cs2.exe. OBS needs
   `--disable-shutdown-check` after an unclean exit, otherwise safe mode disables the WebSocket.
+- Retest 2026-10-29 20:16-20:20, same build (steam.inf 1.41.9.3, unchanged since 10-28 23:41), second demo
+  (FACEIT de_cache): 3 runs, all crash with an access violation ~25 s after launch (dumps 201647, 201842,
+  201948). Removing `-allow_third_party_software` (args `-insecure -console -novid`) changes nothing, so it
+  is not demo-specific and not that flag. Untested: FACEIT client closed (closing it was refused by the
+  agent permission guard; Frank can close it by hand before a run).
 - Options: retest after the next CS2 patch; key-bound cfg files without the console (needs synthetic input,
   check anti-cheat risk first); HLAE route (needs FACEIT/Vanguard off and also uses -insecure, so likely same crash).
 
