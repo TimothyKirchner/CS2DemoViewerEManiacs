@@ -42,6 +42,8 @@ export class VConsole {
       const s = net.connect({host, port});
       s.once("error", reject);
       s.once("connect", () => { s.off("error", reject); s.on("error", () => {}); this.socket = s; resolve(); });
+      // CS2 closing (or crashing) ends the session; later sends must fail instead of recording an empty window.
+      s.on("close", () => { if (this.socket === s) { this.socket = null; this.lost = true; } });
       s.on("data", d => {
         const {packets, rest} = decodePackets(Buffer.concat([this.buffer, d])); this.buffer = rest;
         for (const p of packets) if (p.type === "PRNT") for (const line of printText(p.body).split(/\r?\n/)) {
@@ -53,7 +55,7 @@ export class VConsole {
     });
   }
   send(command) {
-    if (!this.socket) throw new Error("Console not connected");
+    if (!this.socket) throw new Error(this.lost ? "CS2 closed or crashed (console connection lost)" : "Console not connected");
     if (isOnlineCommand(command)) throw new Error(`Refusing online command "${command}": the recorder only plays demos and local maps`);
     this.socket.write(encodeCommand(command));
   }

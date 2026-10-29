@@ -41,7 +41,7 @@ export const DEFAULTS = {
     // HLAE renders at a fixed frame rate, so playback is slower than realtime; wait seconds * slowFactor.
     slowFactor: 2.5
   },
-  obs: {exe: "", url: "ws://127.0.0.1:4455", password: "", slowFactor: 1, scene: "Strat Scope CS2", source: "CS2 capture", window: "Counter-Strike 2:SDL_app:cs2.exe"},
+  obs: {exe: "", url: "ws://127.0.0.1:4455", password: "", slowFactor: 1, scene: "Strat Scope CS2", source: "CS2 window", window: "Counter-Strike 2:SDL_app:cs2.exe"},
   ffmpeg: "ffmpeg",
   // "vconsole" (CS2's VConsole2 port, default) or "netcon" (-netconport; current CS2 builds ignore it).
   console: "vconsole",
@@ -206,17 +206,36 @@ function run(cmd, args, cwd) {
 }
 
 // Creates (once) a scene with a Game Capture of the CS2 window and makes it the program scene.
+// Uses Window Capture with Windows Graphics Capture (method 2): Game Capture's hook stayed black on CS2 here.
+// Only this source is enabled in the scene, scaled to the canvas.
 export async function ensureObsScene(obs, {scene, source, window}) {
   const {scenes} = await obs.request("GetSceneList");
   if (!scenes.some(s => s.sceneName === scene)) await obs.request("CreateScene", {sceneName: scene});
-  const {sceneItems} = await obs.request("GetSceneItemList", {sceneName: scene});
+  // priority 2 = match by executable, so the source never falls back to another window (it once bound to Steam).
+  const inputSettings = {window, priority: 2, method: 2, cursor: false, capture_audio: true, client_area: true};
+  const {inputs} = await obs.request("GetInputList");
+  if (!inputs.some(i => i.inputName === source)) await obs.request("CreateInput", {sceneName: scene, inputName: source, inputKind: "window_capture", inputSettings});
+  // Re-applied every run so the source rebinds to the CS2 window that exists now.
+  else await obs.request("SetInputSettings", {inputName: source, inputSettings, overlay: true});
+  let {sceneItems} = await obs.request("GetSceneItemList", {sceneName: scene});
   if (!sceneItems.some(i => i.sourceName === source)) {
-    const {inputs} = await obs.request("GetInputList");
-    if (inputs.some(i => i.inputName === source)) await obs.request("CreateSceneItem", {sceneName: scene, sourceName: source});
-    else await obs.request("CreateInput", {sceneName: scene, inputName: source, inputKind: "game_capture",
-      inputSettings: {capture_mode: "window", window, capture_cursor: false, capture_audio: true}});
+    await obs.request("CreateSceneItem", {sceneName: scene, sourceName: source});
+    ({sceneItems} = await obs.request("GetSceneItemList", {sceneName: scene}));
+  }
+  const {baseWidth, baseHeight} = await obs.request("GetVideoSettings");
+  for (const it of sceneItems) {
+    await obs.request("SetSceneItemEnabled", {sceneName: scene, sceneItemId: it.sceneItemId, sceneItemEnabled: it.sourceName === source});
+    if (it.sourceName === source) await obs.request("SetSceneItemTransform", {sceneName: scene, sceneItemId: it.sceneItemId,
+      sceneItemTransform: {positionX: 0, positionY: 0, boundsType: "OBS_BOUNDS_SCALE_INNER", boundsWidth: baseWidth, boundsHeight: baseHeight}});
   }
   await obs.request("SetCurrentProgramScene", {sceneName: scene});
+}
+
+// Restores the CS2 window and brings it to the front; minimized or covered windows record black.
+export function focusCs2() {
+  if (process.platform !== "win32") return;
+  const ps = `$p=Get-Process cs2 -ErrorAction SilentlyContinue|?{$_.MainWindowHandle -ne 0}|select -First 1;if($p){Add-Type -Name W -Namespace U -MemberDefinition '[DllImport("user32.dll")]public static extern bool ShowWindow(System.IntPtr h,int c);[DllImport("user32.dll")]public static extern bool SetForegroundWindow(System.IntPtr h);';[U.W]::ShowWindow($p.MainWindowHandle,9)|Out-Null;[U.W]::SetForegroundWindow($p.MainWindowHandle)|Out-Null}`;
+  try { execFileSync("powershell.exe", ["-NoProfile", "-Command", ps], {stdio: "ignore", timeout: 15000}); } catch {}
 }
 
 function launchCommand(cfg) {
@@ -310,7 +329,7 @@ export async function main(argv = process.argv.slice(2)) {
         continue;
       }
       try {
-        await sendAll(con, cmd.seek); await sleep(cfg.settleSeconds * 1000);
+        await sendAll(con, cmd.seek); if (obs) focusCs2(); await sleep(cfg.settleSeconds * 1000);
         // Log the tick CS2 reports after the seek so plan ticks can be checked against demo ticks.
         const at = con.log.length; con.send("demo_info"); await sleep(600);
         const info = con.log.slice(at).filter(l => /tick/i.test(l)).join(" | ");
