@@ -1,9 +1,11 @@
 # HANDOFF
-_Updated 2026-10-29 (claude, hub task 15290efc "instructive rounds + clip timestamps")_
+_Updated 2026-10-29 21:51 CET (Codex desktop recorder attempt 2)_
 
 ## Current task
 Instructive rounds + clip timestamps: done, tested, committed (48a4b62). Recorder (actual clip recording)
-is still blocked by the CS2 `-insecure` crash (HANDOFF_REVIEW.md); do not start CS2 without asking Frank.
+remains blocked: normal Steam launch without `-insecure` also exited during demo loading twice.
+Frank authorized this run; 0/13 clips recorded. See `review-out/desktop-record-report.md` (attempt 2).
+CS2 exited; all 12 settings files restored and byte-verified. OBS remains running, recording inactive.
 
 ## Done
 - `web/review/engine/instructive.mjs` + `scripts/instructive-rounds.mjs`: per-round categories for one
