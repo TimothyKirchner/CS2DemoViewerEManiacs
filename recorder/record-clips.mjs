@@ -12,6 +12,7 @@ import {reviewReplay} from "../web/review/engine/review.mjs";
 import {buildRecordingPlan, spectateCommands} from "../web/review/engine/clip-plan.mjs";
 import {Netcon, sleep} from "./netcon.mjs";
 import {VConsole} from "./vconsole.mjs";
+import {RECORDING_LAUNCH_ARGS, steamRoot, backupSettings, restoreSettings, cs2Running, waitForCs2Exit} from "./cs2-settings.mjs";
 import {Obs} from "./obs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -49,12 +50,14 @@ export const DEFAULTS = {
   netconPort: 2121,
   width: 1920,
   height: 1080,
-  launchArgs: ["-steam", "-insecure", "-novid", "-console", "-windowed", "-high"],
+  launchArgs: RECORDING_LAUNCH_ARGS,
   startupSeconds: 20,
   demoLoadSeconds: 25,
   settleSeconds: 2,
   leadSeconds: 0,
-  setupCommands: ["volume 0.4", "spec_show_xray 0"],
+  // Only non-archived commands belong here: archived convars (volume, spec_show_xray, ...) end up in the
+  // player's own config. Settings are also backed up and restored around every launch (cs2-settings.mjs).
+  setupCommands: [],
   burnStyle: "FontName=Arial,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H80000000,BorderStyle=3,Outline=2,Shadow=0,MarginV=40",
   crf: 20
 };
@@ -77,10 +80,11 @@ export function parseArgs(argv) {
     else if (a === "--no-launch") o.noLaunch = true;
     else if (a === "--keep-open") o.keepOpen = true;
     else if (a === "--no-burn") o.burn = false;
+    else if (a === "--restore-settings") o.restoreSettings = next();
     else if (a === "-h" || a === "--help") o.help = true;
     else throw new Error(`Unknown option ${a}`);
   }
-  if (!o.help && !o.review && !o.plan) throw new Error("Pass --review <file.scopereview> or --plan <plan.json>");
+  if (!o.help && !o.review && !o.plan && !o.restoreSettings) throw new Error("Pass --review <file.scopereview> or --plan <plan.json>");
   return o;
 }
 
@@ -239,9 +243,11 @@ export function focusCs2() {
 }
 
 function launchCommand(cfg) {
-  const game = [...cfg.launchArgs, ...(cfg.console === "netcon" ? ["-netconport", String(cfg.netconPort)] : []), "-w", String(cfg.width), "-h", String(cfg.height)];
+  // No -w/-h/-windowed: CS2 writes those into the player's cs2_video.txt.
+  const game = [...cfg.launchArgs, ...(cfg.console === "netcon" ? ["-netconport", String(cfg.netconPort)] : [])];
   // Anti-cheat drivers (FACEIT, Vanguard) can deny starting cs2.exe from another process, so go through Steam.
-  if (cfg.mode !== "hlae") return cfg.steam ? {cmd: cfg.steam, args: ["-applaunch", "730", ...game.filter(a => a !== "-steam")]} : {cmd: cfg.cs2, args: game};
+  if (cfg.mode !== "hlae") return cfg.steam ? {cmd: cfg.steam, args: ["-applaunch", "730", ...game]} : {cmd: cfg.cs2, args: game};
+  game.unshift("-steam");
   const hook = cfg.hlae.hookDll || path.join(path.dirname(cfg.hlae.exe), "x64", "AfxHookSource2.dll");
   return {cmd: cfg.hlae.exe, args: ["-customLoader", "-noGui", "-autoStart", "-hookDllPath", hook, "-programPath", cfg.cs2, "-cmdLine", game.join(" ")]};
 }
@@ -255,6 +261,10 @@ async function sendAll(con, cmds, dry) {
 export async function main(argv = process.argv.slice(2)) {
   const o = parseArgs(argv);
   if (o.help) { say(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 5).map(l => l.replace(/^\/\/ ?/, "")).join("\n")); return; }
+  if (o.restoreSettings) {
+    if (!await waitForCs2Exit(10000)) throw new Error("Close CS2 first; it rewrites its settings when it exits");
+    say(`Restored ${restoreSettings(o.restoreSettings)} CS2 settings files from ${o.restoreSettings}`); return;
+  }
   const cfg = loadConfig(o.config ?? path.join(HERE, "recorder.json"));
   if (o.mode) cfg.mode = o.mode;
   // recorder.json "player" focuses every run on one player (name or SteamID64) unless --all or --only is given.
@@ -302,13 +312,17 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const results = new Map(), slow = cfg.mode === "hlae" ? cfg.hlae.slowFactor : cfg.obs.slowFactor;
-  let con = null, obs = null, child = null;
+  let con = null, obs = null, child = null, backup = null;
   try {
     if (!o.dryRun) {
       if (problems.length) throw new Error(problems.join("; "));
       if (cfg.mode === "obs") { obs = new Obs(); await obs.connect(cfg.obs.url, cfg.obs.password); await ensureObsScene(obs, cfg.obs); }
       const dest = path.join(csgoDir(cfg.cs2), `${DEMO_NAME}.dem`);
       fs.copyFileSync(demo, dest); say(`Copied demo to ${dest}`);
+      if (!o.noLaunch) {
+        if (cs2Running()) throw new Error("CS2 is already running; close it first (or pass --no-launch) so its settings can be backed up");
+        backup = backupSettings(steamRoot(cfg.cs2)); say(`Backed up CS2 settings to ${backup}`);
+      }
       if (!o.noLaunch) { child = spawn(launch.cmd, launch.args, {detached: true, stdio: "ignore"}); child.unref(); say("Launched CS2, waiting for console..."); }
       con = cfg.console === "netcon" ? await new Netcon().connect(cfg.netconPort) : await new VConsole().connect(cfg.vconsolePort);
       if (!o.noLaunch) await sleep(cfg.startupSeconds * 1000);
@@ -356,6 +370,10 @@ export async function main(argv = process.argv.slice(2)) {
   } finally {
     if (con && !o.keepOpen && !o.noLaunch) { try { con.send("quit"); } catch {} }
     con?.close(); obs?.close();
+    if (backup && !o.keepOpen) {
+      if (await waitForCs2Exit()) say(`Restored ${restoreSettings(backup)} CS2 settings files from ${backup}`);
+      else say(`CS2 is still running; restore your settings after closing it: node recorder/record-clips.mjs --restore-settings "${backup}"`);
+    } else if (backup) say(`CS2 left open. After closing it run: node recorder/record-clips.mjs --restore-settings "${backup}"`);
   }
   fs.writeFileSync(path.join(out, "clips.md"), clipsIndex(plan, clips, results));
   say(`\nWrote ${path.join(out, "clips.md")}`);

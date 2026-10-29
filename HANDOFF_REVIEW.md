@@ -52,6 +52,14 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
 - Options: retest after the next CS2 patch; key-bound cfg files without the console (needs synthetic input,
   check anti-cheat risk first); HLAE route (needs FACEIT/Vanguard off and also uses -insecure, so likely same crash).
 
+## Frank's CS2 settings (2026-10-29)
+- Earlier runs changed his saved settings: `volume` 0.4 and `spec_show_xray` 0 (from setupCommands), and
+  `cs2_video.txt` was rewritten on 2026-10-28 23:47 by the `-w 1920 -h 1080 -windowed` launch. He fixes them
+  himself this afternoon. Since then: recorder/cs2-settings.mjs backs up `Steam\userdata\<id>\730\local\cfg`
+  before every launch and restores it after CS2 exits; launch args are only
+  `-insecure -allow_third_party_software -console -novid`; setupCommands is empty. Keep it that way.
+- `-allow_third_party_software` (lets OBS Game Capture hook CS2) was already in his Steam launch options.
+
 ## Tools on this PC
 - CS2: `C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe`.
 - ffmpeg 8.0.1 (gyan.dev, libass) via WinGet. OBS: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`.

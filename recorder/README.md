@@ -34,6 +34,16 @@ node recorder/record-clips.mjs --plan ../match.clips.json --mode obs
 Output goes to `<input>-clips/`: `NN_R<round>_<player>_<finding>.mp4`, its `.srt`, the raw capture and
 `clips.md` with every critique.
 
+## Your CS2 settings stay untouched
+
+- CS2 starts with `-insecure -allow_third_party_software -console -novid` added to your own Steam launch
+  options. No resolution or window arguments: CS2 would save those to `cs2_video.txt`.
+- No saved (archived) console variables are changed; `setupCommands` is empty by default.
+- Before launching, every file in `Steam\userdata\<id>\730\local\cfg` is backed up to
+  `%LOCALAPPDATA%\StratScope\cs2-settings-backup\<time>`. After CS2 quits, the backup is copied back.
+- With `--keep-open` or `--no-launch` the restore is up to you:
+  `node recorder/record-clips.mjs --restore-settings "<backup folder>"` (close CS2 first).
+
 ## How it works
 
 The demo is copied to `game/csgo/stratscope_review.dem`. CS2 starts (through HLAE in HLAE mode) with

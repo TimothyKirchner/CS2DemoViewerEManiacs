@@ -2,8 +2,16 @@
 // Records a fresh demo of a local 5v5 bot match, for testing the recorder on the current CS2 build.
 // Usage: node recorder/bot-demo.mjs [--map de_mirage] [--rounds 6] [--name stratscope_bots]
 // CS2 must already run (VConsole2 on port 29000). The demo lands in game/csgo/<name>.dem.
+// It changes saved settings (game_type, game_mode, bot_*), so it backs up the CS2 config first, quits CS2 at
+// the end and restores the backup. CS2 only writes its config on exit, so the files on disk are still the
+// player's own when the backup is taken.
 import {VConsole} from "./vconsole.mjs";
 import {sleep} from "./netcon.mjs";
+import {findCs2} from "./record-clips.mjs";
+import {steamRoot, backupSettings, restoreSettings, waitForCs2Exit} from "./cs2-settings.mjs";
+
+const backup = backupSettings(steamRoot(findCs2()));
+console.log(`Backed up CS2 settings to ${backup}`);
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const map = arg("--map", "de_mirage"), rounds = Number(arg("--rounds", 6)), name = arg("--name", "stratscope_bots");
@@ -29,5 +37,7 @@ while (done < rounds) { if (!await roundEnd()) break; done++; console.log(`  rou
 await run(["host_timescale 1", "stop"]);
 await sleep(2000);
 console.log((con.log.filter(l => /Recording|Completed demo|demo/i.test(l)).slice(-3).join("\n")) || "stop sent");
-await run(["disconnect"]);
+await run(["disconnect", "quit"]);
 con.close();
+if (await waitForCs2Exit()) console.log(`Restored ${restoreSettings(backup)} CS2 settings files`);
+else console.log(`CS2 still running; after closing it run: node recorder/record-clips.mjs --restore-settings "${backup}"`);
