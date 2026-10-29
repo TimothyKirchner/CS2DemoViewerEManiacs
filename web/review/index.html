@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Strat Scope Review</title>
+<link rel="stylesheet" href="./review.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="../index.html" title="Back to the 2D viewer">STRAT<span class="brand-light">SCOPE</span><small>3D REVIEW</small></a>
+  <div class="file-context"><span class="status-dot"></span><span id="file-name">No demo loaded</span><span id="coverage" class="coverage"></span></div>
+  <label class="button primary" for="demo-file">Open demo or replay</label>
+  <input id="demo-file" type="file" accept=".dem,.strats,.json,.scopereview" hidden>
+  <button id="save-review" class="quiet" disabled title="Save demo data and review for offline sharing">Save review</button>
+  <button id="export-clips" class="quiet" disabled title="Export the listed clips as a recording plan for recorder/record-clips.mjs (CS2 + HLAE or OBS)">Export clips</button>
+  <button id="help-button" class="icon-button" title="How the review works" aria-label="How the review works">?</button>
+</header>
+<main class="review-grid">
+  <aside class="left">
+    <div class="tabs" role="tablist">
+      <button data-tab="clips" class="selected">Clips</button>
+      <button data-tab="ratings">Ratings</button>
+      <button data-tab="rounds">Rounds</button>
+    </div>
+    <div id="tab-clips" class="tab">
+      <select id="clip-player" aria-label="Filter clips by player"><option value="">All players · featured</option></select>
+      <div class="kind-filter"><button data-kind="" class="selected">All</button><button data-kind="mistake">Mistakes</button><button data-kind="highlight">Highlights</button></div>
+      <div id="clip-list" class="list"></div>
+    </div>
+    <div id="tab-ratings" class="tab" hidden><div id="rating-table"></div></div>
+    <div id="tab-rounds" class="tab" hidden><div id="round-list" class="list"></div></div>
+  </aside>
+  <section class="stage">
+    <div class="stage-bar">
+      <div id="stage-title" class="stage-title">Open a CS2 demo to start the automated review</div>
+      <div class="cams">
+        <button data-cam="orbit" class="selected" title="Orbit around the action (drag to rotate, right-drag to pan, wheel to zoom)">Orbit</button>
+        <button data-cam="pov" title="Eye view of the focused player">POV</button>
+        <button data-cam="chase" title="Third person behind the focused player">Chase</button>
+        <button data-cam="top" title="Top-down">Top</button>
+      </div>
+    </div>
+    <div id="scene" class="scene">
+      <div id="empty" class="empty">
+        <div class="eyebrow">AUTOMATED DEMO REVIEW</div>
+        <h2>Find the rounds worth rewatching.</h2>
+        <p>Strat Scope parses every duel, trade and utility throw, rates mechanics and decisions, and cuts instructive clips with critiques. Everything runs offline.</p>
+        <label class="button primary" for="demo-file">Open .dem</label>
+        <button id="load-sample" class="link">Review the public Mirage sample (coarse data)</button>
+      </div>
+      <div id="loading" class="empty" hidden><div class="spinner"></div><h3 id="loading-stage">Parsing</h3><progress id="loading-bar" max="100" value="0"></progress></div>
+      <div id="hud" class="hud" hidden></div>
+      <div id="note-pop" class="note-pop" hidden></div>
+    </div>
+    <div class="transport">
+      <canvas id="timeline" height="54" aria-label="Clip timeline with win probability and critique markers"></canvas>
+      <div class="controls">
+        <button id="prev-note" title="Previous critique ([)">⏮</button>
+        <button id="play" class="play" title="Play / pause (Space)">▶</button>
+        <button id="next-note" title="Next critique (])">⏭</button>
+        <span id="clock" class="clock">0:00</span>
+        <div class="speeds"><button data-speed="0.25">¼×</button><button data-speed="0.5">½×</button><button data-speed="1" class="selected">1×</button><button data-speed="2">2×</button></div>
+        <label class="check"><input id="pause-notes" type="checkbox" checked> Pause at critiques</label>
+        <label class="check"><input id="show-all-views" type="checkbox"> All view lines</label>
+      </div>
+    </div>
+  </section>
+  <aside class="right">
+    <div class="section-label">CRITIQUE</div>
+    <div id="critique" class="critique"><p class="muted">Select a clip to see what happened, why it matters and what to do instead.</p></div>
+    <div class="section-label">PLAYER</div>
+    <div id="player-card" class="player-card"></div>
+  </aside>
+</main>
+<dialog id="help">
+  <h2>How the review works</h2>
+  <p><strong>Data.</strong> Opening a .dem runs the viewer parse plus a review pass: every <code>player_hurt</code>, every shot with pitch and velocity, and tick-level samples (every 2 ticks) of all players for 3&nbsp;s before each hit and kill, including the server's spotted-by mask. Exported .strats replays lack this detail and get a reduced review (no ADR, reaction or crosshair placement).</p>
+  <p><strong>Mechanics.</strong> Crosshair placement is the angle from your view to the enemy's head when the server first marks them spotted by you; reaction is spot → first shot; time-to-damage is spot → first hit. Counter-strafing compares speed at each duel shot with an accurate-speed threshold. Spotting is radar data and can lag true visibility, so values read optimistic.</p>
+  <p><strong>Decisions.</strong> Heuristics flag dry opening deaths, isolated or untraded deaths, missed trades (with line of sight when spotting is available), re-peeks while damaged, exposure to multiple enemies, unused utility, team flashes and low-percentage fights that should have been saves. Highlights cover trades, flash assists, multi-kills and clutches.</p>
+  <p><strong>Ratings.</strong> HLTV 1.0 uses the public formula; HLTV 2.0 is a community approximation; Impact is win-probability added per round (each kill, plant and defuse valued by a heuristic win-probability model, shared by damage). Scope Rating blends rating, impact, mechanics and decisions around 1.00. None are official HLTV, Leetify or FACEIT numbers.</p>
+  <p>Full method and limitations: <code>web/review/README.md</code>.</p>
+  <form method="dialog"><button>Close</button></form>
+</dialog>
+<div id="toast" hidden></div>
+<script type="module" src="./review.mjs"></script>
+</body>
+</html>
