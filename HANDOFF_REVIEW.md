@@ -40,6 +40,18 @@ were committed; README.md and THIRD_PARTY_NOTICES.txt were staged as HEAD plus t
   The recorder now detects this and aborts with a clear error.
 - `--review` accepts a `.dem` directly (parsed with the bundled WASM parser).
 
+## Blocker found 2026-10-29 08:00 (post-update demo, patch 14193)
+- Test demo: `Downloads\1-67bd8501-...-1-1.dem` (FACEIT, de_ancient, patch 14193; player -_-Yellow chosen).
+- VConsole (29000) only opens when CS2 runs with `-insecure` (+ `-console`). Steam asks to confirm custom args.
+- With `-insecure`, CS2 crashes (access violation, dumps in game\bin\win64\*.mdmp) ~20-40 s into ANY playback
+  of this demo, even via `+playdemo` at launch with no console client connected. Without `-insecure` the same
+  demo plays fine, but then there is no console port. So the recorder cannot drive playback on this PC/build.
+- First OBS run produced 10 black clips because CS2 had already crashed; recorder now aborts on a lost console.
+- OBS: Game Capture stayed black; now Window Capture (WGC) matched by cs2.exe. OBS needs
+  `--disable-shutdown-check` after an unclean exit, otherwise safe mode disables the WebSocket.
+- Options: retest after the next CS2 patch; key-bound cfg files without the console (needs synthetic input,
+  check anti-cheat risk first); HLAE route (needs FACEIT/Vanguard off and also uses -insecure, so likely same crash).
+
 ## Tools on this PC
 - CS2: `C:\Program Files (x86)\Steam\steamapps\common\Counter-Strike Global Offensive\game\bin\win64\cs2.exe`.
 - ffmpeg 8.0.1 (gyan.dev, libass) via WinGet. OBS: `C:\Program Files\obs-studio\bin\64bit\obs64.exe`.
