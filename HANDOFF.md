@@ -2,33 +2,31 @@
 _Updated 2026-10-29 (claude, hub task 15290efc "instructive rounds + clip timestamps")_
 
 ## Current task
-Task 15290efc: find Frank's ("Kampu") most instructive rounds per demo and write clip timestamps.
-Code is WRITTEN BUT NOT RUN, NOT COMMITTED: the headless session had no shell permission (every
-Bash/PowerShell call, even `git status`, needed approval). Recorder blocker unchanged (HANDOFF_REVIEW.md).
+Instructive rounds + clip timestamps: done, tested, committed (48a4b62). Recorder (actual clip recording)
+is still blocked by the CS2 `-insecure` crash (HANDOFF_REVIEW.md); do not start CS2 without asking Frank.
 
-## Done (uncommitted, all new or review-only files)
-- `web/review/engine/instructive.mjs`: per-round categories for one player, score, rank, cap (default 8,
-  min 2 mistakes + 2 good examples), clip windows (6 s lead / 3 s tail, merged), recording plan via
-  `buildRecordingPlan` (same format as "Export clips"), Markdown report.
-- `scripts/instructive-rounds.mjs`: CLI; .dem/.dem.zst/.dem.gz/folders; unpacks to %TEMP%\strat-scope-demos
-  (refuses repo paths); player default = recorder.json "player"; writes `<demo>.rounds.json`,
-  `<demo>.plan.json`, `<demo>.md` to Git-ignored `review-out/`.
-- `tests/instructive.test.mjs` (synthetic events). `.gitignore`: review-out/, *.zst, *.dem.zst, *.dem.gz.
-- Docs: recorder/README.md section "Instructive rounds", AGENTS.md command line.
+## Done
+- `web/review/engine/instructive.mjs` + `scripts/instructive-rounds.mjs`: per-round categories for one
+  player (mistakes and good examples), score, rank, cap 8 (min 2 of each kind), clip windows (6 s lead,
+  3 s tail, merged), recording plan in the "Export clips" format, Markdown report in Git-ignored review-out/.
+- Run: `node scripts/instructive-rounds.mjs <demo|folder>` (.dem/.dem.zst/.dem.gz; player from recorder.json).
+  Needs Node >= 22.15 for .zst; the Codex runtime node (v24) works:
+  `%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe`.
+- Fixed: CS2 demos report round winners as "T"/"CT", the engine compared against 2/3, so every round
+  counted as lost (instructive picks, clutch decisions, win-probability). Shared `winnerTeam()` in util.mjs.
+- First real demo (FACEIT, de_cache, 13-4 win) gives 8 picks in ~20 s; results checked against FACEIT stats.
+- Tests 94/94.
 
-## Next steps (needs an agent/human with shell permission)
-1. Run `node --test --test-reporter=dot tests/*.test.mjs tests/*.test.cjs`; fix failures (new tests unverified).
-2. Smoke: `node scripts/instructive-rounds.mjs ../public-test.dem --player <any name in it>`.
-3. Commit ONLY: .gitignore, AGENTS.md, HANDOFF.md, recorder/README.md, scripts/instructive-rounds.mjs,
-   tests/instructive.test.mjs, web/review/engine/instructive.mjs. Push branch. Leave 1.2.0 files alone.
-4. `hub task done 15290efc --note "..."` (not run yet).
-5. On Frank's demo: `node scripts/instructive-rounds.mjs C:\Users\timot\Documents\CS2Demos\faceit`.
+## Uncommitted on purpose
+- `web/core.mjs` also normalises the winner ("T"/"CT" -> 2/3) and uses `round_end.reason`, which fixes the
+  viewer's "Incomplete" round labels. The file carries the unapproved local 1.2.0 work, so it stays
+  uncommitted with the rest of 1.2.0 until Frank asks.
+
+## Next steps
+- Per-match patterns (same killer / same spot repeatedly) on top of single rounds.
+- Retest the recorder after the next CS2 patch, then record the plan.json clips.
+- Regenerate verification/package-manifest.json (new web/ file) before the next package check.
 
 ## Open issues
-- .zst needs Node >= 22.15 (zlib.zstdDecompressSync) or a `zstd` CLI; Codex runtime node version unchecked.
-- Weak heuristics: buy vs team economy (approx prices, sampled at buy end), saved weapon, isolation, trade
-  window (5 s, killer death only). Clutch counts only alive players from death events (no disconnects).
-- Recorder `--plan` needs `--demo <unpacked .dem>`; the report prints the full command.
-- New web/ file: regenerate verification/package-manifest.json before the next package check.
-- Recorder still blocked (-insecure crash). Release publication UNAPPROVED; do not publish.
-- Local 1.2.0 work still uncommitted; commit only when Frank asks.
+- Weak heuristics: buy vs team economy, saved weapon, isolation, 5 s trade window, clutch ignores disconnects.
+- Public release publication remains UNAPPROVED. Never commit demos, review-out/ or steamids (public repo).
