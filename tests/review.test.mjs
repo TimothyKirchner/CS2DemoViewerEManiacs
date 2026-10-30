@@ -108,3 +108,16 @@ test('coarse public sample review is complete and finite',()=>{
   for(const c of review.clips){assert.ok(c.start<c.end);assert.ok(c.notes.every(n=>n.title&&n.detail));}
   for(const r of review.rounds)assert.ok(r.winProbability.every(p=>p.t>=0&&p.t<=1));
 });
+
+test('reaction skips duels already under fire and impossibly fast spots',()=>{
+  const r=replayWith({events:[death(1000,6,1)]});
+  const fine=[];for(let t=900;t<=1000;t+=2)fine.push({tick:t,players:[{id:'1',team:2,x:0,y:0,z:0,yaw:0,pitch:0,vx:0,vy:0,alive:true,hp:100,seenBy:[]},{id:'6',team:3,x:1000,y:0,z:0,yaw:180,pitch:0,vx:0,vy:0,alive:true,hp:t<1000?100:0,seenBy:t>=960?['1']:[]}]});
+  const shot=tick=>({round:0,tick,id:'1',weapon:'weapon_ak47',x:0,y:0,z:0,yaw:0,pitch:0,speed:0});
+  const hurts=[{round:0,tick:990,victim:'6',attacker:'1',weapon:'ak47',dmg:100,armor:0,hitgroup:'head',hp:0,sameTeam:false}];
+  const side=shots=>{const detail={hurts,shots,fine:[fine],coverage:{spotted:true,pitch:true}};return duelMechanics(r,detail,buildDuels(r,detail)[0]).find(s=>s.player==='1');};
+  const spray=side([shot(950),shot(956),shot(962),shot(990)]);   // firing before the spot: next bullet is no reaction
+  assert.equal(spray.prefire,true);assert.equal(spray.reactionMs,undefined);assert.equal(spray.crosshair,undefined);
+  const lag=side([shot(962),shot(990)]);                          // 31 ms after the spot: the flag lagged
+  assert.equal(lag.spotLag,true);assert.equal(lag.reactionMs,undefined);assert.equal(lag.crosshair,undefined);
+  assert.equal(side([shot(976),shot(990)]).reactionMs,250);
+});

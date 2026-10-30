@@ -5,7 +5,7 @@ import {frameBefore, winnerTeam} from "./util.mjs";
 import {roundCategories, playerName} from "./instructive.mjs";
 
 export const MATCH_SUMMARY_VERSION = 1;
-const MECH_KEYS = ["accuracy", "headshot", "headHitShare", "duelWinRate", "duels", "duelsWon", "reactionMs", "timeToDamageMs", "crosshair", "strafe", "score"];
+const MECH_KEYS = ["accuracy", "headshot", "headHitShare", "duelWinRate", "duels", "duelsWon", "reactionMs", "reactionSamples", "timeToDamageMs", "crosshair", "crosshairSamples", "prefireDuels", "spotLagDuels", "strafe", "score"];
 const REVIEW_LEAD_SECONDS = 8;  // jump this far before the key moment so the situation is readable
 
 export function matchSummary(replay, review, result) {

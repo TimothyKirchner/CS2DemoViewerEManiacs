@@ -3,6 +3,9 @@
 import {aimError, frameBefore, isGun, median, strafeThreshold, clamp, round1} from "./util.mjs";
 
 const SPOT_LOOKBACK = 3, GAP = 3;
+// Shots this long before the spot mean the player was already firing; under MIN_HUMAN_MS the spot flag lagged.
+// Spot-based values need MIN_SAMPLES clean duels before a match median is reported.
+export const PREFIRE_SECONDS = 0.6, MIN_HUMAN_MS = 100, MIN_SAMPLES = 5;
 
 export function roundShots(round, detail, index) {
   if (detail?.shots) return detail.shots.filter(s => s.round === index);
@@ -79,13 +82,22 @@ export function duelMechanics(replay, detail, duel) {
       const s = spotStart(frames, me, them, duel.start, rate);
       if (s.tick !== null && !s.censored) { ref = s.tick; r.spotTick = s.tick; }
     }
+    // Already firing (spray, prefire, spam) when the enemy got spotted: the next bullet is not a reaction,
+    // and the crosshair is already on them. Such duels are left out of reaction, time-to-damage and placement.
+    if (ref !== null && shots.some(s => s.id === me && isGun(s.weapon) && s.tick < ref && s.tick >= ref - PREFIRE_SECONDS * rate)) {
+      r.prefire = true; ref = null;
+    }
+    const ms = t => Math.round((t - ref) / rate * 1000);
+    const shot = ref === null ? null : shots.find(s => s.id === me && s.tick >= ref && s.tick <= duel.end && isGun(s.weapon));
+    // Faster than a human can react means the spotted flag lagged real visibility: no usable start time,
+    // and the crosshair at that moment was already on the enemy.
+    if (shot && ms(shot.tick) < MIN_HUMAN_MS) { r.spotLag = true; ref = null; }
     if (ref !== null) {
       const a = frameBefore(frames, ref), p = a.players.find(x => x.id === me), q = a.players.find(x => x.id === them);
       if (p && q) { const e = aimError(p, q); r.crosshair = round1(e.total); r.crosshairPitch = round1(e.pitch); r.distance = Math.round(e.distance); }
-      const shot = shots.find(s => s.id === me && s.tick >= ref && s.tick <= duel.end && isGun(s.weapon));
-      if (shot) r.reactionMs = Math.round((shot.tick - ref) / rate * 1000);
+      if (shot) r.reactionMs = ms(shot.tick);
       const hit = duel.contacts.find(c => c.from === me && !c.deathOnly);
-      if (hit && hit.tick >= ref) r.timeToDamageMs = Math.round((hit.tick - ref) / rate * 1000);
+      if (hit && hit.tick >= ref && ms(hit.tick) >= MIN_HUMAN_MS) r.timeToDamageMs = ms(hit.tick);
     }
     const from = (ref ?? duel.start - rate) - 2, mine = shots.filter(s => s.id === me && s.tick >= from && s.tick <= duel.end && isGun(s.weapon));
     r.shots = mine.length;
@@ -107,14 +119,17 @@ const score = (v, [good, bad]) => v === null || v === undefined ? null : clamp((
 
 export function summarizeMechanics(entries, {kills = 0, hsKills = 0, gunHurts = [], allShots = 0} = {}) {
   const pick = k => entries.map(e => e[k]).filter(Number.isFinite);
+  const spotMedian = k => pick(k).length >= MIN_SAMPLES ? median(pick(k)) : null;
   const strafeShots = entries.reduce((s, e) => s + e.strafeShots, 0), strafed = entries.reduce((s, e) => s + e.strafedShots, 0);
   const duelShots = entries.reduce((s, e) => s + e.shots, 0), hits = entries.reduce((s, e) => s + e.hits, 0);
   const decided = entries.filter(e => e.decided);
   const m = {
     duels: entries.length, duelsWon: entries.filter(e => e.won).length,
     duelWinRate: decided.length ? entries.filter(e => e.won).length / decided.length : null,
-    crosshair: median(pick("crosshair")), crosshairSamples: pick("crosshair").length,
-    reactionMs: median(pick("reactionMs")), timeToDamageMs: median(pick("timeToDamageMs")),
+    crosshair: spotMedian("crosshair"), crosshairSamples: pick("crosshair").length,
+    reactionMs: spotMedian("reactionMs"), reactionSamples: pick("reactionMs").length,
+    timeToDamageMs: spotMedian("timeToDamageMs"),
+    prefireDuels: entries.filter(e => e.prefire).length, spotLagDuels: entries.filter(e => e.spotLag).length,
     strafe: strafeShots >= 5 ? strafed / strafeShots : null, strafeShots,
     accuracy: gunHurts.length && duelShots >= 10 ? hits / duelShots : null, shots: allShots,
     headshot: kills >= 3 ? hsKills / kills : null,
