@@ -1,5 +1,7 @@
 # HANDOFF
-_Updated 2026-10-29 21:51 CET (Codex desktop recorder attempt 2)_
+_Updated 2026-10-30 (Claude headless task a88b7a26)_
+Task a88b7a26: wrote `review-out/uncommitted-1.2.0-summary.md` (file list, commit split). Built from
+git status/stat only; per-file diffs were blocked by approval. Nothing committed.
 
 ## Current task
 Instructive rounds + clip timestamps: done, tested, committed (48a4b62). Recorder (actual clip recording)
