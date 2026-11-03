@@ -1,39 +1,38 @@
 # HANDOFF
-_Updated 2026-11-03 (Claude, hub task e0038ccf, opponent analyser 3/5)_
+_Updated 2026-11-03 (Claude, hub task 48b4252e, opponent analyser 4/5)_
 
 ## Current task
-Opponent analyser on branch `feature/opponent-analyser`. Tasks 1 (roster), 2 (buy-type library) and 3
-(positions and setups) done. Tasks 4-5 queued in the hub (48b4252e, 70ed7d0c); plan in Git-ignored
-`review-out/opponent-analyser-plan.md`.
+Opponent analyser on branch `feature/opponent-analyser`. Tasks 1 (roster), 2 (buy-type library),
+3 (positions and setups) and 4 (tendencies) done. Task 5 (anti-strat report, hub 70ed7d0c) is next; plan in
+Git-ignored `review-out/opponent-analyser-plan.md`.
 
-## Done (task 3)
-- Parser: `last_place_name` added to `PLAYER_PROPS`; each frame player has `place` (interned callout string).
-  WASM untouched. Saved .strats/sessions without `place` still work (callout shows "unknown").
-- `web/opponent-positions.mjs`: `positionHeatmap` (team or one core player; windows 0-20 s, 20-45 s, 45 s+;
-  reuses `aggregateHeatmap`, plus callout time shares), `sideSetups`/`positionAnalysis` (per map: CT setups
-  at 15 s and T defaults at 20 s as "A 2 / mid 1 / B 2" with % of rounds, spot holders, core players' usual
-  spot, AWP spots, rotations = zone change setup -> plant + 5 s or 45 s), `filterRounds` (buy type from
-  `buyLibrary(...).rounds`, score leading/tied/trailing via `roundScores`), `zoneOf` (BombsiteA/B callout,
-  then site anchors within 1400, else mid). A stand-in on the usual spot of an absent core player is
-  labelled "filled by stand-in (usually <name>)"; per-player rows are core players only.
-- UI: "Positions and setups" in the Analyse opponent tab (map/side/buy/score/time/player filters, radar heatmap,
-  callout table, setup/spot/player/AWP/rotation tables with ▶ example rounds, heuristics listed).
-- `web/maps/maps.json`: de_anubis site anchors (median of BombsiteA/B callout samples; method reproduces
-  de_ancient's anchors within ~60 px).
-- `scripts/opponent-positions.mjs <demo|folder> [--json out]`: real-demo check, counts only.
-- Tests: `tests/opponent-positions.test.mjs`; 117/117 unit tests, viewer smoke and session smoke pass.
-- Real check (4 FACEIT demos, ~105 s): 4/4 matched, 87 rounds, callout on 99.98% of 1.42 M samples.
-  de_ancient CT 23 rounds / 9 setups (top 7 of 23), T 36 / 20 setups; de_anubis CT 15 / 8, T 13 / 9.
-  Filled by stand-in: ancient CT 4, T 1. AWP rounds: ancient CT 6, T 13; anubis CT 4, T 5.
-  Score filter: leading 54, tied 15, trailing 18. Local output: review-out/opponent-positions.json.
+## Done (task 4)
+- `web/opponent-tendencies.mjs`: `duelTendencies` (opening duels by callout/zone and core player, round win
+  after opening kill/death, trades within 5 s incl. "X for Y" pairs), `stackTendencies` (CT >= 3 / T >= 4 on one
+  site at the setup sample; plants, post-plant wins, CT retakes = no living CT on the plant site at the plant),
+  `utilityClusters` (smoke/molly/flash/HE landings, greedy radius clusters, median and 25-75 % time, callout,
+  throwers), `economyHabits` (next-round buy after lost T/CT pistol, won pistol, lost buy/eco, won buy; saves),
+  `playerTendencies` (computeStatistics on target side: openings, trades, clutches, core only),
+  `timeoutTendencies` (freeze time >= median + 20 s; likely caller = team on a 2+ losing streak),
+  `tendencyAnalysis` (all of it plus heuristic notes).
+- UI: "Tendencies" section in the Analyse opponent tab (map/side filter, ▶ example rounds, sample sizes).
+- `scripts/opponent-tendencies.mjs <demo|folder> [--json out]`: real-demo check, counts only.
+- Tests: `tests/opponent-tendencies.test.mjs`; 124/124 unit tests; session smoke (new tendencies asserts) and
+  viewer smoke pass.
+- Real check (4 FACEIT demos, ~105 s): 4/4 matched, 87 rounds. Openings won: ancient T 21/36, CT 13/23;
+  anubis T 7/13, CT 7/15. Deaths traded 18-30 %. Stacks: ancient CT 11/23 (all A), anubis CT 9/15.
+  Retakes: ancient 1, anubis 4. Smoke clusters 4-8 per map/side. Clutches eligible on 77/87 rounds.
+  Economy: after lost T pistol 1/2 force/half; non-pistol buys 79 (eco 4, force 7, half 6, full 56, anti-eco 6);
+  saves 7/34. Timeouts: 7 in 78 checked rounds (two at 140 s look like pauses). Output: review-out/opponent-tendencies.json.
 
 ## Next steps
-- Task 4 (tendencies) can reuse `zoneOf`, `roundScores`, `filterRounds` and frame `place` callouts.
+- Task 5: extend prepReport into a per-map "how to beat them" page from buyLibrary, positionAnalysis and
+  tendencyAnalysis; evidence links; veto suggestion; HTML/Markdown export.
 - Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
 
 ## Open issues
-- Weak heuristics: 1400-unit site radius makes de_ancient CT "mid" rare; rotations look high there
-  (41 in 20 CT rounds). Consider callout-to-zone tables per map if Frank finds the tables noisy.
+- Timeout caller is not in the parsed data (no gamerules props); long technical pauses also count.
+- Weak heuristics: 1400-unit site radius makes de_ancient CT "mid" rare (stacks show A only there).
 - Smoke tests rewrite verification/*.png; restore them (`git checkout -- verification/`) unless updating.
 - Recorder blocked (CS2 exits while loading demos); retest after the next CS2 patch.
 - Public release remains UNAPPROVED. Never commit demos, review-out/ or SteamIDs/names (public repo).
