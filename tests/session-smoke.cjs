@@ -46,6 +46,9 @@ app.whenReady().then(async()=>{
  await click('[data-review="opponent"]');
  assert.ok(await evaluate(`document.querySelectorAll('[data-o="roster"] tbody tr').length>=5 && document.querySelectorAll('[data-include]').length===2`),'opponent roster and demos rendered');
  assert.ok(await evaluate(`document.querySelectorAll('[data-o="buys"] tbody tr').length>0 && document.querySelector('[data-o="buys"] [data-play]') && document.querySelector('[data-o="buys"]').textContent.includes(" of 18 rounds") && document.querySelector('[data-o="buys"]').textContent.includes('Heuristic')`),'buy-type round library rendered');
+ assert.ok(await evaluate(`document.querySelector('[data-o="positions"]').textContent.includes(' / mid ') && document.querySelectorAll('[data-o="positions"] tbody tr').length>0 && document.querySelectorAll('[data-o="pos-controls"] select').length===6`),'positions and setups rendered');
+ await evaluate(`{const sel=document.querySelector('[data-pos="window"]');sel.value='45+';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
+ assert.ok(await evaluate(`document.querySelector('[data-o="places"]').textContent.includes('45 s+') && document.querySelector('[data-pos="window"]').value==='45+'`),'heatmap time window switches');
  await evaluate(`{const sel=document.querySelector('#opponent-analyser [data-player]');sel.value='core';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
  assert.ok(await evaluate(`document.querySelector('[data-o="roster"]').textContent.includes('(manual)')`),'opponent override applied');
  await click('[data-o="reset"]');
