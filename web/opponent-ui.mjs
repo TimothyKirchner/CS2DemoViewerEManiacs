@@ -3,6 +3,7 @@ import {buyLibrary,BUY_TYPES} from './opponent-buys.mjs';
 import {positionAnalysis,positionHeatmap,filterRounds,roundScores,WINDOWS,SCORE_STATES} from './opponent-positions.mjs';
 import {duelTendencies,stackTendencies,utilityClusters,playerTendencies,economyHabits,timeoutTendencies,tendencyAnalysis,UTILITY_TYPES} from './opponent-tendencies.mjs';
 import {escapeHtml as esc} from './scouting.mjs';
+import {antiStratReport,renderAntiStrat,DEFAULT_POOL} from './opponent-report.mjs';
 
 // "Analyse opponent" tab: target-team detection with Frank's overrides (stored by the app, saved in the session).
 export function initOpponent(container,api){
@@ -12,6 +13,9 @@ export function initOpponent(container,api){
   <h4>Buy-type round library</h4><div data-o="buys"></div>
   <h4>Positions and setups</h4><div data-o="pos-controls" class="scout-controls"></div><div class="scout-radar"><canvas data-o="radar" width="512" height="512" aria-label="Opponent position heatmap"></canvas><div data-o="places"></div></div><div data-o="positions"></div>
   <h4>Tendencies</h4><div data-o="tend-controls" class="scout-controls"></div><div data-o="tendencies"></div>
+  <h4>Anti-strat report</h4><p class="muted">Per-map "how to beat them" page: habits with sample sizes, evidence rounds, stand-in notes and a veto suggestion. Heuristic: patterns in these demos only, not predictions.</p>
+  <div class="scout-controls"><label>Title <input data-o="report-title" value="How to beat them"></label><label>Map pool <input data-o="report-pool" value="${DEFAULT_POOL.join(', ')}" size="60"></label></div>
+  <div class="session-actions"><button data-o="report-preview">Build report</button><button data-o="report-md">Export Markdown</button><button data-o="report-html">Export HTML</button></div><div data-o="report"></div>
   <h4>Roster</h4><div data-o="roster"></div><h4>Demos</h4><div data-o="demos"></div></div>`;
   const el=name=>container.querySelector(`[data-o="${name}"]`);let detection=null;
   const table=(headers,rows)=>rows.length?`<div class="scout-table"><table><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'<p class="muted">None.</p>';
@@ -105,6 +109,14 @@ export function initOpponent(container,api){
       ...d.unmatched.map(x=>[include(x.entryId,true),open(x.entryId,x.source),esc(x.map),esc(x.date||'—'),'Not matched',esc(x.reason)]),
       ...d.excluded.map(x=>[include(x.entryId,false),open(x.entryId,x.source),esc(x.map),'—','Excluded','—'])]);
   }
+  function buildReport(){
+    const entries=api.getEntries();if(!detection?.demos.length)return null;
+    const pool=el('report-pool').value.split(/[\s,]+/).map(x=>x.trim()).filter(Boolean);
+    return antiStratReport(entries,detection,{mapDefs:api.getMapDefs?.()??{},pool:pool.length?pool:DEFAULT_POOL,title:el('report-title').value.trim()||'How to beat them'});
+  }
+  function exportReport(format){const report=buildReport();if(!report){el('report').innerHTML='<p class="muted">Import demos of the opponent first.</p>';return;}
+    const content=renderAntiStrat(report,format),url=URL.createObjectURL(new Blob([content],{type:format==='html'?'text/html':'text/markdown'})),a=document.createElement('a');
+    a.href=url;a.download=`anti-strat.${format==='html'?'html':'md'}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function update(change){const o=api.getOpponent();change(o);api.setOpponent(o);render();}
   container.addEventListener('change',e=>{const t=e.target;
     if(t.dataset.player!==undefined)update(o=>{const id=t.dataset.player;o.core=o.core.filter(x=>x!==id);o.standIn=o.standIn.filter(x=>x!==id);if(t.value==='core')o.core.push(id);if(t.value==='stand-in')o.standIn.push(id);});
@@ -116,7 +128,10 @@ export function initOpponent(container,api){
   container.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
     if(b.dataset.play){api.openRound(b.dataset.play,Number(b.dataset.round),Number(b.dataset.tick),true);return;}
     if(b.dataset.open){api.openRound(b.dataset.open,0,undefined,false);return;}
+    if(b.dataset.o==='report-preview'){const report=buildReport();el('report').innerHTML=report?renderAntiStrat(report,'html',{play:true}):'<p class="muted">Import demos of the opponent first.</p>';return;}
+    if(b.dataset.o==='report-md'){exportReport('markdown');return;}
+    if(b.dataset.o==='report-html'){exportReport('html');return;}
     if(b.dataset.o==='reset')update(o=>{o.core=[];o.standIn=[];o.excluded=[];});
   });
-  return {refresh:render,getDetection:()=>detection};
+  return {refresh:render,getDetection:()=>detection,getReport:buildReport};
 }

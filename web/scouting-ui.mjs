@@ -1,3 +1,4 @@
+import {renderAntiStrat} from './opponent-report.mjs';
 import {scoutingRows,aggregateHeatmap,queryArea,clusterPatterns,roleProfiles,mapResults,simulateVeto,prepReport,escapeHtml as esc} from './scouting.mjs';
 
 export function initScouting(container,api){
@@ -48,7 +49,9 @@ export function initScouting(container,api){
   }
   function veto(){const scenario=simulateVeto(pool,history);el('veto-map').innerHTML=scenario.remaining.map(m=>`<option>${esc(m)}</option>`).join('');el('veto').innerHTML=`<ol>${history.map(s=>`<li>${esc(s.team)} ${esc(s.action)} ${esc(s.map)}</li>`).join('')}</ol><p>Picks: ${esc(scenario.picks.join(', ')||'none')}. Remaining: ${esc(scenario.remaining.join(', ')||'none')}.${scenario.decider?` Decider: ${esc(scenario.decider)}.`:''}</p>`;}
   function handoff(items,label){if(!items.length)throw new Error('No matching evidence to send.');if(api.onAddPlaylist)api.onAddPlaylist(items,label);else throw new Error('Playlist handoff is unavailable. Open an evidence round to review it.');el('status').textContent=`Sent ${items.length} evidence references to playlist.`;}
-  function exportReport(format){const content=prepReport({title:value('title'),notes:value('notes')+`\nVeto scenario: ${history.map(s=>`${s.team} ${s.action} ${s.map}`).join('; ')}`,rows,patterns,profiles,results,tags},format),url=URL.createObjectURL(new Blob([content],{type:format==='html'?'text/html':'text/markdown'})),a=document.createElement('a');a.href=url;a.download=`opponent-prep.${format==='html'?'html':'md'}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  // The anti-strat page of the Analyse opponent tab, when that tab found a team.
+  function antiStratSections(){try{const report=api.getAntiStrat?.();return report?[{markdown:renderAntiStrat(report,'markdown'),html:renderAntiStrat(report,'html',{fragment:true})}]:[];}catch{return [];}}
+  function exportReport(format){const content=prepReport({title:value('title'),notes:value('notes')+`\nVeto scenario: ${history.map(s=>`${s.team} ${s.action} ${s.map}`).join('; ')}`,rows,patterns,profiles,results,tags,sections:antiStratSections()},format),url=URL.createObjectURL(new Blob([content],{type:format==='html'?'text/html':'text/markdown'})),a=document.createElement('a');a.href=url;a.download=`opponent-prep.${format==='html'?'html':'md'}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   container.addEventListener('click',event=>{const button=event.target.closest('button');if(!button)return;try{
     if(button.dataset.evidence){const e=JSON.parse(button.dataset.evidence);api.openRound(e.entryId,e.roundIndex,e.tick,false);return;}
     if(button.dataset.pattern!==undefined){handoff(patterns[Number(button.dataset.pattern)].evidence,'Recurring pattern');return;}
