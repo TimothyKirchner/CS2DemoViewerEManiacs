@@ -30,7 +30,7 @@ Map results describe observed round outcomes. The veto tool lets you enter a poo
 
 ## Opponent analyser
 
-Open **Review → Analyse opponent** and import several demos of the team you will play.
+Click **Analyse opponent** in the toolbar and import several demos of the team you will play.
 
 - **Roster.** Players are matched by SteamID, never by name; the latest name is shown. A player in at least half of the included demos is core, everyone else is a stand-in ("stand-in, 1 of 4 demos"). A demo belongs to the team when at least 3 of its players are core. Override any player (core / stand-in) or exclude a demo; overrides are saved in the session.
 - **Buy-type round library.** Rounds per map and side grouped as pistol, eco, force, half, full, anti-eco and post-plant save, each with sample size, win rate, typical route, first contact time, utility per round and a representative round.
