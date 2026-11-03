@@ -57,7 +57,7 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   const out=[],L={...HABIT_LIMITS,...limits},rounds=tend?.rounds??pos?.rounds??0;
   if(rounds<L.minRounds)return out;
   for(const p of pos?.players??[])if(p.rounds>=L.minRounds&&p.count/p.rounds>=L.anchorShare)
-    out.push(habit('position',`${p.place} (${p.zone}) ${side===3?'held':'taken'} by ${p.name} in ${pct(p.count/p.rounds)} of rounds`,p.count,p.rounds,
+    out.push(habit('position',`${p.place} (${p.zone}) ${side===3?'anchored':'taken'} by ${p.name}`,p.count,p.rounds,
       side===3?`Expect ${p.name} on ${p.place}; pre-plan flashes or a utility clear for that spot.`:`Expect ${p.name} on ${p.place}; hold an angle on it early.`,p.evidence,{player:p.name}));
   const setup=pos?.setups?.[0];
   if(setup&&pos.rounds>=L.minRounds&&setup.share>=L.setupShare)out.push(habit('setup',`Default ${side===3?'CT setup':'T spread'}: ${setup.label}`,setup.count,pos.rounds,
@@ -66,27 +66,31 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   if(awp&&pos.awp.rounds>=L.minRounds&&awp.share>=L.awpShare)out.push(habit('awp',`AWP on ${awp.place} (${awp.zone})${awp.holders[0]&&!awp.holders[0].label.startsWith('stand-in')?`, usually ${awp.holders[0].label}`:''}`,awp.count,pos.awp.rounds,
     'Smoke or flash that AWP angle before you cross it.',awp.evidence,{unit:'AWP rounds'}));
   const st=tend?.stacks;
-  if(st&&st.sampled>=L.minRounds&&st.stacks.share>=L.stackShare){const site=st.stacks.A>=st.stacks.B?'A':'B';
+  if(st&&st.sampled>=L.minRounds&&st.stacks.share>=L.stackShare){const tie=st.stacks.A===st.stacks.B,site=st.stacks.A>st.stacks.B?'A':'B',other=site==='A'?'B':'A';
     out.push(habit('stack',`Stack ${st.minPlayers}+ on one site (A ${st.stacks.A}, B ${st.stacks.B})`,st.stacks.count,st.sampled,
-      side===3?`Show early presence at ${site}, then hit the other site.`:`Expect a ${site} hit; delay a rotation and retake.`,st.stacks.evidence));}
+      side===3?(tie?'They stack either site: get early info before you commit.':`Show early presence at ${site} to keep the stack there, then hit ${other}.`)
+        :(tie?'They commit 4+ to one site, either A or B: hold passive, delay and retake as five.':`Expect a ${st.minPlayers}-player hit on ${site}; play ${site} heavier and retake ${other}.`),st.stacks.evidence));}
   if(side===3&&st&&st.plants.count>=L.minRounds)out.push(habit('retake',`Retake (no CT left on the plant site at the plant)`,st.plants.retakes,st.plants.count,
     st.plants.retakeShare>=.3?'They give up sites often: plant fast and set a post-plant crossfire.':'They hold sites at the plant: bring utility for the entry.',[],{unit:'plants'}));
   const o=tend?.duels?.openings;
   if(o&&o.count>=L.minRounds)out.push(habit('openings',`Opening duels won`,o.wins,o.count,
     o.winRate>=.55?'They win the first duel often: avoid dry peeks, trade in pairs.':'They lose the first duel often: take early fights with a trade ready.',[],{unit:'openings'}));
-  for(const p of (tend?.duels?.places??[]).filter(p=>p.count>=L.placeOpenings).slice(0,2))out.push(habit('opening-place',`Opening duel at ${p.place} (${p.zone}), won ${p.wins} of ${p.count}`,p.count,o.count,
-    p.winRate>=.5?`Do not dry-peek ${p.place}; use utility or a second angle.`:`Challenge ${p.place} early: they lose that duel more often than not.`,p.evidence,{unit:'openings'}));
+  // Opening spots where they clearly win or clearly lose the first duel (70 % / 30 %).
+  for(const p of (tend?.duels?.places??[]).filter(p=>p.count>=L.placeOpenings&&(p.wins/p.count>=.7||p.wins/p.count<=.3)).slice(0,3))out.push(habit('opening-place',`Opening duels at ${p.place} (${p.zone}) won`,p.wins,p.count,
+    p.wins/p.count>=.7?`Do not dry-peek ${p.place}; use utility or a second angle.`:`Challenge ${p.place} early: they lose that duel more often than not.`,p.evidence,{unit:'openings there'}));
   const tr=tend?.duels?.trades;
   if(tr&&tr.deaths>=L.minRounds*2&&tr.share<=L.lowTrade)out.push(habit('trades',`Deaths traded within ${tr.seconds} s`,tr.traded,tr.deaths,
     'They trade rarely: isolate players and take 1v1 fights.',[],{unit:'deaths'}));
   for(const [type,label] of [['smoke','Smoke'],['fire','Molly'],['flash','Flash']]){
     const c=tend?.utility?.types?.[type]?.clusters?.[0];
-    if(c&&c.share>=L.utilityShare&&rounds>=L.minRounds)out.push(habit('utility',`${label} near ${c.place||'unknown callout'} at ${c.medianSeconds.toFixed(0)} s (25-75 %: ${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s)`,c.rounds,rounds,
+    const where=c&&(c.place&&c.place!=='unknown'?c.place:`unknown callout (x ${Math.round(c.x)}, y ${Math.round(c.y)})`);
+    if(c&&c.share>=L.utilityShare&&rounds>=L.minRounds)out.push(habit('utility',`${label} near ${where} at ${c.medianSeconds.toFixed(0)} s (25-75 %: ${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s)`,c.rounds,rounds,
       `Take that area before ${c.earlySeconds.toFixed(0)} s or wait it out; it lands at a fixed time.`,c.evidence));
   }
-  const full=(buys?.types??[]).find(t=>t.type==='full');
-  if(side===2&&full?.route&&full.count>=L.minRounds&&full.route.count/full.count>=L.setupShare)out.push(habit('route',`Full buys go ${full.route.name}`,full.route.count,full.count,
-    `On their full buys, play one extra player toward ${full.route.name}.`,full.rounds,{unit:'full-buy rounds'}));
+  // T full buys: the plant site they choose most (rounds without a plant do not count as a route).
+  const full=(buys?.types??[]).find(t=>t.type==='full'),plant=full?.routes?.find(r=>/^[AB] plant$/.test(r.name));
+  if(side===2&&plant&&full.count>=L.minRounds&&plant.count/full.count>=L.setupShare){const site=plant.name[0];
+    out.push(habit('route',`Full buys plant ${site}`,plant.count,full.count,`On their full buys, play one extra player toward ${site}.`,[],{unit:'full-buy rounds'}));}
   const cl=(tend?.players?.players??[]).filter(p=>p.clutchAttempts>=L.minClutches).sort((a,b)=>b.clutchWins-a.clutchWins)[0];
   if(cl&&cl.clutchWins/cl.clutchAttempts>=.5)out.push(habit('clutch',`${cl.name} clutches`,cl.clutchWins,cl.clutchAttempts,
     `Do not play slow against ${cl.name} late in rounds; check corners in pairs.`,[],{unit:'clutches',player:cl.name}));
@@ -95,8 +99,11 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
 
 // Economy habits (team level, all maps): force after a lost pistol and after a lost buy round.
 export function economyNotes(economy,limits=HABIT_LIMITS){
-  return (economy?.rows??[]).filter(r=>r.count>0).map(r=>{const force=(r.force??0)+(r.half??0);
-    return habit('economy',`${r.label}: force or half buy next`,force,r.count,force/r.count>=limits.forceShare?'Expect a force: play at range and avoid giving them easy rifle kills.':'They usually save or eco here: stack info and play anti-eco.',[],{unit:'rounds'});});
+  const counter={eco:'Expect an eco: play anti-eco, keep distance and do not give away rifles.',force:'Expect a force: play at range and avoid giving them easy rifle kills.',
+    half:'Expect a half buy: play at range and avoid giving them easy rifle kills.',full:'Expect a full buy: bring your full utility.','anti-eco':'Expect a full buy: bring your full utility.'};
+  return (economy?.rows??[]).filter(r=>r.count>0).map(r=>{const next=[...(r.next??[])].sort((a,b)=>b.count-a.count)[0],force=(r.force??0)+(r.half??0);
+    return next?habit('economy',`${r.label}: next round mostly ${next.label.toLowerCase()}`,next.count,r.count,counter[next.type]??'Check the rounds before planning around it.',[],{unit:'rounds',force})
+      :habit('economy',`${r.label}: force or half buy next`,force,r.count,force/r.count>=limits.forceShare?counter.force:counter.eco,[],{unit:'rounds'});});
 }
 
 export function standInNotes(detection,map){

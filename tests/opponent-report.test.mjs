@@ -52,7 +52,7 @@ test('side habits name core anchors with samples and evidence, never stand-ins',
   const ct=report.maps.find(m=>m.map==='de_test').sides.find(s=>s.side===3);
   assert.equal(ct.rounds,10);
   const anchor=ct.habits.find(h=>h.kind==='position'&&h.player==='Name o4');
-  assert.ok(anchor);assert.equal(anchor.text,'BombsiteB (B) held by Name o4 in 100% of rounds');assert.equal(anchor.sample,'10 of 10 rounds');assert.equal(anchor.heuristic,true);
+  assert.ok(anchor);assert.equal(anchor.text,'BombsiteB (B) anchored by Name o4');assert.equal(anchor.sample,'10 of 10 rounds');assert.equal(anchor.heuristic,true);
   assert.ok(anchor.evidence.length>0&&anchor.evidence.length<=5);assert.ok(anchor.evidence.every(e=>['a','b'].includes(e.entryId)&&Number.isFinite(e.tick)));
   assert.ok(!ct.habits.some(h=>/s1|Name s1/.test(h.text)));
   const smoke=ct.habits.find(h=>h.kind==='utility');assert.ok(smoke);assert.match(smoke.text,/^Smoke near .* at 8 s/);assert.equal(smoke.sample,'8 of 10 rounds');
@@ -68,6 +68,8 @@ test('stand-in notes and economy notes carry sample sizes',()=>{
   assert.deepEqual(standInNotes(d,'de_two'),[]);
   const e=economyNotes({rows:[{label:'After a lost T pistol',count:4,force:2,half:1,eco:1,full:0},{label:'Empty',count:0}]});
   assert.equal(e.length,1);assert.equal(e[0].sample,'3 of 4 rounds');assert.match(e[0].counter,/Expect a force/);
+  const n=economyNotes({rows:[{label:'After a won pistol',count:6,force:0,half:0,next:[{type:'eco',label:'Eco',count:1},{type:'full',label:'Full buy',count:5}]}]});
+  assert.equal(n[0].text,'After a won pistol: next round mostly full buy');assert.equal(n[0].sample,'5 of 6 rounds');assert.match(n[0].counter,/full buy/);
 });
 
 test('markdown and HTML exports; prepReport embeds the page as a section',()=>{

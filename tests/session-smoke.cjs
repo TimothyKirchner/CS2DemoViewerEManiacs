@@ -50,6 +50,8 @@ app.whenReady().then(async()=>{
  assert.ok(await evaluate(`{const t=document.querySelector('[data-o="tendencies"]').textContent;t.includes('Opening duels') && t.includes('Utility landing clusters') && t.includes('Economy habits') && t.includes('Timeouts') && t.includes('core players only') && document.querySelectorAll('[data-o="tend-controls"] select').length===2}`),'tendencies rendered');
  await evaluate(`{const sel=document.querySelector('[data-tend="side"]');sel.value=sel.value==='2'?'3':'2';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
  assert.ok(await evaluate(`document.querySelector('[data-o="tendencies"]').textContent.includes(document.querySelector('[data-tend="side"]').value==='3'?' CT: ':' T: ')`),'tendencies side switches');
+ await click('[data-o="report-preview"]');
+ assert.ok(await evaluate(`{const r=document.querySelector('[data-o="report"]');const t=r.textContent;t.includes('how to beat them') && t.includes('Map veto suggestion (heuristic)') && t.includes('Roster')}`),'anti-strat report preview rendered');
  await evaluate(`{const sel=document.querySelector('[data-pos="window"]');sel.value='45+';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
  assert.ok(await evaluate(`document.querySelector('[data-o="places"]').textContent.includes('45 s+') && document.querySelector('[data-pos="window"]').value==='45+'`),'heatmap time window switches');
  await evaluate(`{const sel=document.querySelector('#opponent-analyser [data-player]');sel.value='core';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
