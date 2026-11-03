@@ -43,6 +43,11 @@ app.whenReady().then(async()=>{
  await click('[data-review="stats"]');
  assert.ok(await evaluate(`document.querySelectorAll('#review-statistics tbody tr').length>0`),'statistics rendered');
  assert.equal(await evaluate(`Boolean(window.injected)`),false,'imported names remain text');
+ await click('[data-review="opponent"]');
+ assert.ok(await evaluate(`document.querySelectorAll('[data-o="roster"] tbody tr').length>=5 && document.querySelectorAll('[data-include]').length===2`),'opponent roster and demos rendered');
+ await evaluate(`{const sel=document.querySelector('#opponent-analyser [data-player]');sel.value='core';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
+ assert.ok(await evaluate(`document.querySelector('[data-o="roster"]').textContent.includes('(manual)')`),'opponent override applied');
+ await click('[data-o="reset"]');
  await click('[data-review="scout"]');
  assert.ok(await evaluate(`document.getElementById('advanced-scouting').textContent.length>100`),'scouting controls mounted');
  await evaluate(`for(const [key,value] of Object.entries({x1:-10000,y1:-10000,x2:10000,y2:10000})){document.querySelector('[data-s="'+key+'"]').value=value;}`);
