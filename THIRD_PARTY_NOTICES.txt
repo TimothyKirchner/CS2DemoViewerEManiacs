@@ -11,6 +11,14 @@ distributed through https://github.com/MurkyYT/cs2-map-icons
 Revision: e2e3a061475b3461fda61f52041b01b0c4c4cde6
 Original overview metadata is retained in web/maps/.
 
+Loadout silhouettes: Valve Counter-Strike game assets, distributed through
+https://github.com/Juknum/counter-strike-icons
+Revision: 92fa323cb5f954f310b8d653a7c280f5d1335163
+Source: cs2/panorama/images/icons/equipment/
+Vector geometry is retained in web/loadout-art.mjs; source filename mappings
+are recorded in verification/import-equipment.cjs.
+These game assets remain property of Valve; no open-source asset license is claimed.
+
 Electron: https://github.com/electron/electron (MIT).
 Electron's LICENSE and LICENSES.chromium.html are included with its runtime.
 electron-builder: https://github.com/electron-userland/electron-builder (MIT).
