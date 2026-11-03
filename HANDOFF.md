@@ -1,35 +1,39 @@
 # HANDOFF
-_Updated 2026-11-03 (Claude, hub task e6cfeb38, opponent analyser 2/5)_
+_Updated 2026-11-03 (Claude, hub task e0038ccf, opponent analyser 3/5)_
 
 ## Current task
-Opponent analyser on branch `feature/opponent-analyser`. Tasks 1 (roster detection) and 2 (buy-type round
-library) done. Tasks 3-5 queued in the hub (e0038ccf, 48b4252e, 70ed7d0c); plan in Git-ignored
+Opponent analyser on branch `feature/opponent-analyser`. Tasks 1 (roster), 2 (buy-type library) and 3
+(positions and setups) done. Tasks 4-5 queued in the hub (48b4252e, 70ed7d0c); plan in Git-ignored
 `review-out/opponent-analyser-plan.md`.
 
-## Done (task 2)
-- `web/opponent-buys.mjs`: `buyLibrary(entries, opponentRounds(...), {mapDefs})` classifies every target-team
-  round from equipment value (price table, best sample in the first 5 s, 4 players scale to 5): pistol, eco
-  (< 5000), full (>= 20000), force (mean bank <= 1000 after buying) or half buy in between, anti-eco (enemy
-  < 5000). Post-plant save = lost after a plant with >= 1 survivor (tag; also counted under its buy type).
-  Per map and side, each buy type gets sample ("3 of 9 rounds"), win rate, most common route (T: plant site,
-  CT: bombsite nearest the first contact, via maps.json anchors), median first contact, utility per round
-  and a representative round. Helpers: `playerValue`, `teamValue`, `classifyBuy`, `siteOf`, `roundFacts`.
-- UI: "Buy-type round library" section in the Analyse opponent tab (map picker, T/CT tables, ▶ play button
-  opens and plays the representative round, heuristics listed under the tables).
-- `scripts/opponent-buys.mjs <demo|folder> [--json out]`: real-demo check, prints counts only.
-- Tests: `tests/opponent-buys.test.mjs` (synthetic); session smoke checks the library; all unit tests,
-  viewer smoke and session smoke pass.
-- Real check (4 FACEIT demos in Downloads/demos/28_10, ~100 s parse): 4/4 demos matched, 87 target-team
-  rounds: full 56, pistol 8, force 7, half 6, anti-eco 6, eco 4, unknown 0; post-plant saves 6; every round
-  has a first contact. de_ancient T 36 / CT 23, de_anubis T 13 / CT 15. Local output: review-out/opponent-buys.json.
+## Done (task 3)
+- Parser: `last_place_name` added to `PLAYER_PROPS`; each frame player has `place` (interned callout string).
+  WASM untouched. Saved .strats/sessions without `place` still work (callout shows "unknown").
+- `web/opponent-positions.mjs`: `positionHeatmap` (team or one core player; windows 0-20 s, 20-45 s, 45 s+;
+  reuses `aggregateHeatmap`, plus callout time shares), `sideSetups`/`positionAnalysis` (per map: CT setups
+  at 15 s and T defaults at 20 s as "A 2 / mid 1 / B 2" with % of rounds, spot holders, core players' usual
+  spot, AWP spots, rotations = zone change setup -> plant + 5 s or 45 s), `filterRounds` (buy type from
+  `buyLibrary(...).rounds`, score leading/tied/trailing via `roundScores`), `zoneOf` (BombsiteA/B callout,
+  then site anchors within 1400, else mid). A stand-in on the usual spot of an absent core player is
+  labelled "filled by stand-in (usually <name>)"; per-player rows are core players only.
+- UI: "Positions and setups" in the Analyse opponent tab (map/side/buy/score/time/player filters, radar heatmap,
+  callout table, setup/spot/player/AWP/rotation tables with ▶ example rounds, heuristics listed).
+- `web/maps/maps.json`: de_anubis site anchors (median of BombsiteA/B callout samples; method reproduces
+  de_ancient's anchors within ~60 px).
+- `scripts/opponent-positions.mjs <demo|folder> [--json out]`: real-demo check, counts only.
+- Tests: `tests/opponent-positions.test.mjs`; 117/117 unit tests, viewer smoke and session smoke pass.
+- Real check (4 FACEIT demos, ~105 s): 4/4 matched, 87 rounds, callout on 99.98% of 1.42 M samples.
+  de_ancient CT 23 rounds / 9 setups (top 7 of 23), T 36 / 20 setups; de_anubis CT 15 / 8, T 13 / 9.
+  Filled by stand-in: ancient CT 4, T 1. AWP rounds: ancient CT 6, T 13; anubis CT 4, T 5.
+  Score filter: leading 54, tied 15, trailing 18. Local output: review-out/opponent-positions.json.
 
 ## Next steps
-- Task 3 (positions and setups) can filter by buy type via `buyLibrary(...).rounds` (type per round ref).
-- de_anubis has no site anchors in web/maps/maps.json, so routes there read "site unknown"; add anchors.
+- Task 4 (tendencies) can reuse `zoneOf`, `roundScores`, `filterRounds` and frame `place` callouts.
 - Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
 
 ## Open issues
+- Weak heuristics: 1400-unit site radius makes de_ancient CT "mid" rare; rotations look high there
+  (41 in 20 CT rounds). Consider callout-to-zone tables per map if Frank finds the tables noisy.
 - Smoke tests rewrite verification/*.png; restore them (`git checkout -- verification/`) unless updating.
-- Weak heuristics: saved weapons count as bought; force vs half by remaining bank; route only by plant/contact.
 - Recorder blocked (CS2 exits while loading demos); retest after the next CS2 patch.
 - Public release remains UNAPPROVED. Never commit demos, review-out/ or SteamIDs/names (public repo).
