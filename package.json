@@ -1,7 +1,7 @@
 {
   "name": "strat-scope-desktop",
   "productName": "Strat Scope",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Offline CS2 tactical demo viewer for Windows",
   "author": "Strat Scope",
   "private": true,
@@ -34,6 +34,7 @@
       "README.txt",
       "ANALYSIS.md",
       "FEATURE_VERIFICATION.md",
+      "LOCAL_REVIEW.md",
       "THIRD_PARTY_NOTICES.txt"
     ],
     "win": {
