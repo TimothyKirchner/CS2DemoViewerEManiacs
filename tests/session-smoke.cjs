@@ -45,6 +45,7 @@ app.whenReady().then(async()=>{
  assert.equal(await evaluate(`Boolean(window.injected)`),false,'imported names remain text');
  await click('[data-review="opponent"]');
  assert.ok(await evaluate(`document.querySelectorAll('[data-o="roster"] tbody tr').length>=5 && document.querySelectorAll('[data-include]').length===2`),'opponent roster and demos rendered');
+ assert.ok(await evaluate(`document.querySelectorAll('[data-o="buys"] tbody tr').length>0 && document.querySelector('[data-o="buys"] [data-play]') && document.querySelector('[data-o="buys"]').textContent.includes(" of 18 rounds") && document.querySelector('[data-o="buys"]').textContent.includes('Heuristic')`),'buy-type round library rendered');
  await evaluate(`{const sel=document.querySelector('#opponent-analyser [data-player]');sel.value='core';sel.dispatchEvent(new Event('change',{bubbles:true}));}`);
  assert.ok(await evaluate(`document.querySelector('[data-o="roster"]').textContent.includes('(manual)')`),'opponent override applied');
  await click('[data-o="reset"]');
