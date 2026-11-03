@@ -28,6 +28,20 @@ Recurring patterns compare coarse 512-unit cells: opening occupancy, three chron
 
 Map results describe observed round outcomes. The veto tool lets you enter a pool, choose acting teams and apply or undo bans/picks; it makes no prediction. Add coach notes and tactic tags, then export a preparation report as HTML or Markdown. Reports contain match/round/tick references; keep the accompanying session bundle to revisit them.
 
+## Opponent analyser
+
+Open **Review → Analyse opponent** and import several demos of the team you will play.
+
+- **Roster.** Players are matched by SteamID, never by name; the latest name is shown. A player in at least half of the included demos is core, everyone else is a stand-in ("stand-in, 1 of 4 demos"). A demo belongs to the team when at least 3 of its players are core. Override any player (core / stand-in) or exclude a demo; overrides are saved in the session.
+- **Buy-type round library.** Rounds per map and side grouped as pistol, eco, force, half, full, anti-eco and post-plant save, each with sample size, win rate, typical route, first contact time, utility per round and a representative round.
+- **Positions and setups.** CT setups and T spreads (A / mid / B at 15 s CT, 20 s T), usual spots of core players, AWP positions and rotations, filterable by buy type and score; heatmaps per time window and player.
+- **Tendencies.** Opening duels by callout and player, trades within 5 s, stacks and retakes, utility landing clusters with timing, economy habits after pistol and buy rounds, clutches and likely timeouts.
+- **Anti-strat report.** "Build report" shows a per-map "how to beat them" page: exploitable habits with sample sizes ("BombsiteA anchored by X: 82% (18 of 22 rounds)"), a counter idea per habit, ▶ evidence rounds that open the viewer, stand-in notes and a map veto suggestion (ban their strongest map, pick their weakest; maps without demos stay unknown). "Export Markdown" / "Export HTML" save it with round references (round, demo file, tick); the Cross-match scouting prep report includes the same page.
+
+Team-level numbers use every matched round, stand-ins included; named player habits use core players only, and a stand-in on an absent core player's spot is labelled "filled by stand-in". Every pattern, counter idea and veto suggestion is a heuristic from the imported demos, not a prediction: fewer than 10 rounds are marked "small sample". Zones use the bombsite callouts and calibrated site anchors (1400 units), so some mid callouts can count as a site.
+
+From the command line (no UI, no CS2): `node scripts/opponent-report.mjs <demo|folder>... --md out.md --html out.html` writes the same report; keep it out of Git, it contains player names.
+
 ## Voice and recording limits
 
 Attach an audio file in Matches. Offset is the demo time in seconds at which audio begins: audio time = demo tick / tick rate − offset. Positive offset delays audio. Pause, seek and supported playback speeds follow the replay; volume is per match. Audio is not extracted from the demo or sent anywhere.

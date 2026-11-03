@@ -9,6 +9,7 @@ Offline CS2 demo viewer for opponent scouting, built with Electron. Demos are pr
 - Player/team statistics, ADR, KAST, opening duels, trades, clutches, flash/utility impact, weapon/map/economy splits and imported-cohort rankings.
 - Cross-match occupancy heatmaps, area/time queries, recurring opening/path/utility candidates and observed role profiles with replay evidence.
 - Manual map-veto scenarios and editable opponent preparation reports exported as HTML or Markdown.
+- Opponent analyser ("Analyse opponent"): import the enemy team's demos; players are matched by SteamID with core/stand-in detection, then the tab shows typical rounds per buy type, CT setups and T defaults with heatmaps, tendencies (openings, trades, stacks, utility timings, economy, clutches) and a per-map "how to beat them" anti-strat report with sample sizes, evidence rounds and a veto suggestion, exported as HTML or Markdown. See [LOCAL_REVIEW.md](LOCAL_REVIEW.md#opponent-analyser).
 - Attach local voice recordings per match; offset, volume, pause, seek and playback speed follow the review timeline.
 - Copy selected player positions/angles and jump between recorded kills.
 - 3D automated review (`web/review/`, "3D Review" link): rates mechanics (crosshair placement, reaction, counter-strafing) and decisions (trades, isolation, re-peeks, utility), gives HLTV 1.0/2.0-style and Scope ratings, and cuts critiqued clips you can replay in 3D.
