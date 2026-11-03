@@ -40,12 +40,12 @@ export function filterRounds(refs,{map,side,buyType,score}={},{buyRounds=[],scor
     &&(!score||scores.get(refKey(r))?.state===score));
 }
 
-// A for site A, B for site B, else mid. Calibrated site anchors first; callout names as the fallback.
+// A for site A, B for site B, else mid. The game's bombsite callout decides first, then the nearest
+// calibrated site anchor; everything else (and maps without anchors) counts as mid.
 export function zoneOf(mapDef,p){
-  const site=siteOf(mapDef,p.x,p.y);if(site==='A'||site==='B')return site;
   const place=String(p.place??'');
-  if(site==='unknown'){if(/(bombsite|site)_?a$|^a(site|_|$)/i.test(place))return 'A';if(/(bombsite|site)_?b$|^b(site|_|$)/i.test(place))return 'B';}
-  return 'mid';
+  if(/^bombsite_?a$/i.test(place))return 'A';if(/^bombsite_?b$/i.test(place))return 'B';
+  const site=siteOf(mapDef,p.x,p.y);return site==='A'||site==='B'?site:'mid';
 }
 export const setupLabel=zones=>`A ${zones.A??0} / mid ${zones.mid??0} / B ${zones.B??0}`;
 
@@ -136,7 +136,7 @@ export function positionAnalysis(entries,detection,refs,{mapDefs={},buyRounds=[]
     ct:sideSetups(entries,kept.filter(r=>r.map===map&&r.side===3),{mapDefs,detection,names}),
     t:sideSetups(entries,kept.filter(r=>r.map===map&&r.side===2),{mapDefs,detection,names})})),
     warnings:[
-      `Heuristic: setups sample living players ${SETUP_SECONDS[3]} s (CT) and ${SETUP_SECONDS[2]} s (T) after freeze end. Zone = nearest calibrated bombsite within 1400 units, else mid; without anchors, callout names decide.`,
+      `Heuristic: setups sample living players ${SETUP_SECONDS[3]} s (CT) and ${SETUP_SECONDS[2]} s (T) after freeze end. Zone = the BombsiteA/BombsiteB callout, else the nearest calibrated bombsite within 1400 units, else mid.`,
       `Heuristic: a rotation is a zone change between the setup sample and ${AFTER_PLANT_SECONDS} s after the plant (or ${ROTATION_SECONDS} s without a plant).`,
       'Team-level tables use every matched round, stand-ins included. Player rows and named holders are core players only; a stand-in on the usual spot of an absent core player is labelled "filled by stand-in".',
       'Callouts come from the game\'s last place name for each player. AWP = AWP held or carried at the setup sample.',

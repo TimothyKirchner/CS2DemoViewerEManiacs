@@ -108,7 +108,16 @@
     "image": "./maps/de_anubis.png",
     "lower": null,
     "splitZ": null,
-    "sites": {}
+    "sites": {
+      "A": [
+        771.2,
+        303.4
+      ],
+      "B": [
+        327.7,
+        508.8
+      ]
+    }
   },
   "de_mirage": {
     "name": "Mirage",

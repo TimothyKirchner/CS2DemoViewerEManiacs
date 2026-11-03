@@ -31,9 +31,10 @@ function setup(){
   const entries=[a,b,c],d=detectOpponent(entries);return {entries,d,refs:opponentRounds(entries,d)};
 }
 
-test('zones use calibrated site anchors, then callout names without anchors',()=>{
+test('zones use the bombsite callout, then calibrated site anchors',()=>{
   assert.equal(zoneOf(MAP,{x:1900,y:100,place:'Anything'}),'A');
-  assert.equal(zoneOf(MAP,{x:0,y:0,place:'BombsiteA'}),'mid');
+  assert.equal(zoneOf(MAP,{x:0,y:0,place:'BombsiteA'}),'A','bombsite callout wins over anchors');
+  assert.equal(zoneOf(MAP,{x:-1900,y:0,place:'Middle'}),'B');
   assert.equal(zoneOf({},{x:0,y:0,place:'BombsiteB'}),'B');
   assert.equal(zoneOf({},{x:0,y:0,place:'Middle'}),'mid');
   assert.equal(setupLabel({A:2,mid:1,B:2}),'A 2 / mid 1 / B 2');
