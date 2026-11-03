@@ -104,8 +104,8 @@ export function sideSetups(entries,refs,{mapDefs={},detection,names=new Map()}={
   const evidence=s=>({entryId:s.entryId,roundIndex:s.roundIndex,number:s.number,source:s.source,tick:s.tick});
   // Usual spot of each core player on this side (most common callout at the setup time).
   const usual=new Map();
-  for(const id of core){const seen=snaps.flatMap(s=>s.players.filter(p=>p.id===id));if(!seen.length)continue;const [place,count]=top(seen.map(p=>p.place))[0];const [zone]=top(seen.filter(p=>p.place===place).map(p=>p.zone))[0];
-    usual.set(id,{id,name:names.get(id)||id,place,zone,count,rounds:seen.length,sample:sample(count,seen.length),awp:seen.filter(p=>p.awp).length});}
+  for(const id of core){const seen=snaps.flatMap(s=>s.players.filter(p=>p.id===id).map(p=>({...p,snap:s})));if(!seen.length)continue;const [place,count]=top(seen.map(p=>p.place))[0];const [zone]=top(seen.filter(p=>p.place===place).map(p=>p.zone))[0];
+    usual.set(id,{id,name:names.get(id)||id,place,zone,count,rounds:seen.length,sample:sample(count,seen.length),awp:seen.filter(p=>p.awp).length,evidence:seen.filter(p=>p.place===place).slice(0,10).map(p=>evidence(p.snap))});}
   // A stand-in standing on the usual spot of a core player who did not play that round fills that spot.
   const holder=(s,p)=>{if(p.core)return {label:names.get(p.id)||p.id,core:true};
     const missing=[...usual.values()].filter(u=>!s.roster.has(u.id)&&(u.place===p.place||u.zone===p.zone)).sort((a,b)=>Number(b.place===p.place)-Number(a.place===p.place))[0];
