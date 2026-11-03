@@ -1,6 +1,6 @@
 // Strat Scope: timeline normalization, independent of rendering and parser runtime.
 export const EVENT_NAMES = ["round_start", "round_freeze_end", "round_end", "round_officially_ended", "round_announce_match_start", "round_announce_last_round_half", "smokegrenade_detonate", "smokegrenade_expired", "inferno_startburn", "inferno_expire", "inferno_extinguish", "flashbang_detonate", "hegrenade_detonate", "decoy_started", "decoy_detonate", "weapon_fire", "player_death", "player_hurt", "player_blind", "bomb_planted", "bomb_defused", "bomb_exploded", "bomb_begindefuse", "bomb_abortdefuse", "bomb_dropped", "bomb_pickup"];
-export const PLAYER_PROPS = ["X", "Y", "Z", "yaw", "pitch", "health", "team_num", "weapon_name", "armor_value", "has_helmet", "has_defuser", "balance", "is_alive", "inventory", "flash_duration", "game_time"];
+export const PLAYER_PROPS = ["X", "Y", "Z", "yaw", "pitch", "health", "team_num", "weapon_name", "armor_value", "has_helmet", "has_defuser", "balance", "is_alive", "inventory", "flash_duration", "game_time", "last_place_name"];
 export function plain(v) {
   if (v instanceof Map) return Object.fromEntries([...v].map(([k,x]) => [k,plain(x)]));
   if (Array.isArray(v)) return v.map(plain);
@@ -79,7 +79,9 @@ export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.d
   const t1=t0 && rows.find(x=>x.tick>=t0.tick+64 && Number.isFinite(x.game_time) && x.game_time>t0.game_time);
   if(t0 && t1){const rate=(t1.tick-t0.tick)/(t1.game_time-t0.game_time);if(rate>=16&&rate<=256) tickRate=Math.round(rate);}
   const rounds=findRounds(events,tickRate), players=new Map(); let ri=0;
-  const frameMaps=rounds.map(()=>new Map());
+  const frameMaps=rounds.map(()=>new Map()),places=new Map();
+  // Callout names repeat on every sample; intern them so large demos keep one copy per name.
+  const place=name=>{if(typeof name!=="string"||!name)return undefined;let v=places.get(name);if(v===undefined){v=name;places.set(name,v);}return v;};
   for(const row of rows) {
     while(ri<rounds.length && row.tick>rounds[ri].end)ri++;
     if(ri>=rounds.length)break;
@@ -87,7 +89,7 @@ export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.d
     const id=String(row.steamid ?? row.name); if(id==="0"||id==="undefined")continue;
     players.set(id,{id,name:row.name||id});
     let frame=frameMaps[ri].get(row.tick);if(!frame){frame={tick:row.tick,players:[]};frameMaps[ri].set(row.tick,frame);}
-    frame.players.push({id,x:row.X,y:row.Y,z:row.Z??0,yaw:row.yaw??0,pitch:row.pitch,hp:row.health??0,team:row.team_num,alive:row.is_alive??row.health>0,weapon:row.weapon_name??"",armor:row.armor_value,hasHelmet:row.has_helmet,hasDefuser:row.has_defuser,money:row.balance,inventory:row.inventory,flash:row.flash_duration??0});
+    frame.players.push({id,x:row.X,y:row.Y,z:row.Z??0,yaw:row.yaw??0,pitch:row.pitch,hp:row.health??0,team:row.team_num,alive:row.is_alive??row.health>0,weapon:row.weapon_name??"",armor:row.armor_value,hasHelmet:row.has_helmet,hasDefuser:row.has_defuser,money:row.balance,inventory:row.inventory,flash:row.flash_duration??0,place:place(row.last_place_name)});
   }
   for(let i=0;i<rounds.length;i++) {
     const r=rounds[i];r.frames=[...frameMaps[i].values()];
