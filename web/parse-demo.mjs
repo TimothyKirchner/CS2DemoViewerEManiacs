@@ -18,7 +18,7 @@ export async function parseDemo(bytes, name, parser, report, onProgress = () => 
 
   progress("Reading rounds, kills and utility events", "parseEvents", 15);
   report.context.eventNames = core.EVENT_NAMES;
-  report.context.eventPlayerProps = ["X", "Y", "Z", "yaw", "team_num"];
+  report.context.eventPlayerProps = ["X", "Y", "Z", "yaw", "team_num", "health"];
   report.context.eventOtherProps = ["total_rounds_played", "is_warmup_period"];
   const events = core.plain(parser.parseEvents(bytes, core.EVENT_NAMES, report.context.eventPlayerProps, report.context.eventOtherProps));
 
@@ -46,7 +46,7 @@ export async function parseDemo(bytes, name, parser, report, onProgress = () => 
   }
 
   progress("Preparing replay timeline", "assemble", 90);
-  const replay = core.assemble(header, events, rows, grenades, name);
+  const replay = core.assemble(header, events, rows, grenades, name, {requested:[...core.EVENT_NAMES],damage:true,deaths:true,blinds:true});
   if (warning) replay.warnings.push(warning);
   report.context.replayWarnings = replay.warnings;
   report.context.replayRoundCount = replay.rounds.length;

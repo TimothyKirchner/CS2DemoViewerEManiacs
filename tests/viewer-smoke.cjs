@@ -13,7 +13,7 @@ app.whenReady().then(async()=>{
   const demoPath=demoArg<0?null:path.resolve(process.argv[demoArg+1]);
   protocol.handle('stratscope',request=>demoPath&&new URL(request.url).pathname==='/__test_fixture.dem'?new Response(fs.readFileSync(demoPath)):handler(request));
   const errors=[];
-  const win=new BrowserWindow({show:true,width:1480,height:960,webPreferences:{contextIsolation:true,sandbox:true,backgroundThrottling:false}});
+  const win=new BrowserWindow({show:false,width:1480,height:960,webPreferences:{contextIsolation:true,sandbox:true,backgroundThrottling:false,offscreen:true}});
   win.webContents.on('console-message',event=>{if(event.level==='error')errors.push(event.message);});
   win.webContents.on('render-process-gone',(_e,d)=>errors.push(JSON.stringify(d)));
   const evaluate=code=>win.webContents.executeJavaScript(code);
@@ -46,9 +46,13 @@ app.whenReady().then(async()=>{
   assert.equal(await evaluate(`document.getElementById('round-label').textContent`),`ROUND ${String(target).padStart(2,'0')}`,'representative playback navigates');
   await evaluate(`document.getElementById('play').click()`);
   if(demoPath){
+    // The bundled sample is this same recording; remove it to exercise a fresh
+    // worker import rather than correctly deduplicating the parsed result.
+    await evaluate(`document.getElementById('review-button').click();document.querySelector('[data-remove]').click();document.getElementById('close-session').click();`);
     await evaluate(`(async()=>{const bytes=await(await fetch('/__test_fixture.dem')).arrayBuffer();const transfer=new DataTransfer();transfer.items.add(new File([bytes],'public-test.dem'));const input=document.getElementById('demo-file');input.files=transfer.files;input.dispatchEvent(new Event('change'));})()`);
     let imported=false;
     for(let i=0;i<600;i++){imported=await evaluate(`document.getElementById('file-name').textContent==='public-test.dem' && document.getElementById('loading').hidden`);if(imported)break;await sleep(100);}
+    if(!imported)console.error(await evaluate(`({toast:document.getElementById('toast').textContent,source:document.getElementById('file-name').textContent,stage:document.getElementById('loading-stage').textContent})`));
     assert.ok(imported,'real demo imported through viewer worker');
     assert.equal(await evaluate(`document.querySelectorAll('.player-row').length`),10);
   }
