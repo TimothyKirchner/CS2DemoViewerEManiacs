@@ -1,38 +1,35 @@
 # HANDOFF
-_Updated 2026-10-30 (Claude headless task a88b7a26)_
-Task a88b7a26: wrote `review-out/uncommitted-1.2.0-summary.md` (file list, commit split). Built from
-git status/stat only; per-file diffs were blocked by approval. Nothing committed.
+_Updated 2026-11-03 (Claude, hub task 3de4a075, opponent analyser 1/5)_
 
 ## Current task
-Instructive rounds + clip timestamps: done, tested, committed (48a4b62). Recorder (actual clip recording)
-remains blocked: normal Steam launch without `-insecure` also exited during demo loading twice.
-Frank authorized this run; 0/13 clips recorded. See `review-out/desktop-record-report.md` (attempt 2).
-CS2 exited; all 12 settings files restored and byte-verified. OBS remains running, recording inactive.
+Opponent analyser on branch `feature/opponent-analyser`. Task 1/5 (opponent mode + roster detection) done.
+Tasks 2-5 queued in the hub (e6cfeb38, e0038ccf, 48b4252e, 70ed7d0c); plan in Git-ignored
+`review-out/opponent-analyser-plan.md`.
 
-## Done
-- `web/review/engine/instructive.mjs` + `scripts/instructive-rounds.mjs`: per-round categories for one
-  player (mistakes and good examples), score, rank, cap 8 (min 2 of each kind), clip windows (6 s lead,
-  3 s tail, merged), recording plan in the "Export clips" format, Markdown report in Git-ignored review-out/.
-- Run: `node scripts/instructive-rounds.mjs <demo|folder>` (.dem/.dem.zst/.dem.gz; player from recorder.json).
-  Needs Node >= 22.15 for .zst; the Codex runtime node (v24) works:
-  `%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe`.
-- Fixed: CS2 demos report round winners as "T"/"CT", the engine compared against 2/3, so every round
-  counted as lost (instructive picks, clutch decisions, win-probability). Shared `winnerTeam()` in util.mjs.
-- First real demo (FACEIT, de_cache, 13-4 win) gives 8 picks in ~20 s; results checked against FACEIT stats.
-- Tests 94/94.
-
-## 1.2.0 committed (2026-11-03, Frank's request)
-- The local 1.2.0 work is committed on this branch in 5 commits (9d8ad34..502280c) and pushed; it was
-  already based on the current Git version. 97/97 unit tests, session and viewer smoke pass. Not released.
-- Next: opponent analyser on branch `feature/opponent-analyser` (pushed). Plan incl. stand-in rules in
-  Git-ignored `review-out/opponent-analyser-plan.md`. Queued as hub tasks 3de4a075 (1/5 roster, base),
-  e6cfeb38, e0038ccf, 48b4252e, 70ed7d0c (hard, assigned to Claude, priority 50..10; 2-5 need task 1).
+## Done (task 1)
+- `web/opponent.mjs`: `detectOpponent(entries, overrides)` finds the target team by SteamID. Core = in >= 50%
+  of included demos; candidates that shared a roster form one team, strongest group wins (manual core
+  overrides add weight, so one "core" mark resolves an ambiguous single demo). A demo belongs to the team
+  when >= 3 roster players are core. Returns roster (core/stand-in, "stand-in, 1 of 4 demos", demos,
+  rounds, maps, latest name), matched demos (team key, start side, side per round), unmatched demos with
+  reason, excluded demos, map groups. `demoRosters(replay)`, `opponentRounds(entries, detection)` give
+  per-round side refs for tasks 2-5. `normalizeOverrides({core, standIn, excluded})`.
+- Session bundle: optional `opponent` overrides field (`sessionBundle(entries, clips, overrides)`,
+  `readBundle(...).opponent`); app remaps excluded entry IDs on import.
+- UI: header button "Analyse opponent" and a session tab (`web/opponent-ui.mjs`): import button, status,
+  maps, roster table with Auto/Core/Stand-in override, demo table with include checkbox.
+- `scripts/opponent-roster.mjs <demo|folder> [--json out]`: real-demo check via the parser (local output).
+- Tests: `tests/opponent.test.mjs` (synthetic IDs only), session smoke covers the tab; all unit tests,
+  viewer smoke and session smoke pass.
+- REAL_DEMO_RESULT
 
 ## Next steps
-- Per-match patterns (same killer / same spot repeatedly) on top of single rounds.
-- Retest the recorder after the next CS2 patch, then record the plan.json clips.
-- Regenerate verification/package-manifest.json (new web/ file) before the next package check.
+- Task 2 (buy-type round library) builds on `opponentRounds()` + buy labels in core.mjs/analysis.mjs.
+- Per-player tendencies must use `detection.core` only and say so; team stats use all matched rounds.
+- Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
 
 ## Open issues
+- Smoke tests rewrite verification/*.png; restore them (`git checkout -- verification/`) unless updating.
 - Weak heuristics: buy vs team economy, saved weapon, isolation, 5 s trade window, clutch ignores disconnects.
-- Public release publication remains UNAPPROVED. Never commit demos, review-out/ or steamids (public repo).
+- Recorder blocked (CS2 exits while loading demos); retest after the next CS2 patch.
+- Public release remains UNAPPROVED. Never commit demos, review-out/ or SteamIDs/names (public repo).
