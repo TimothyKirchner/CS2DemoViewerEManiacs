@@ -21,7 +21,9 @@ Tasks 2-5 queued in the hub (e6cfeb38, e0038ccf, 48b4252e, 70ed7d0c); plan in Gi
 - `scripts/opponent-roster.mjs <demo|folder> [--json out]`: real-demo check via the parser (local output).
 - Tests: `tests/opponent.test.mjs` (synthetic IDs only), session smoke covers the tab; all unit tests,
   viewer smoke and session smoke pass.
-- REAL_DEMO_RESULT
+- Real check (4 FACEIT demos in Downloads/demos/28_10, ~105 s parse): 4/4 demos matched, not ambiguous;
+  5 core (4 in 4/4, 1 in 3/4) + 1 stand-in (1 of 4); de_ancient 3 demos, de_anubis 1; side switch seen in
+  every demo. Local output: review-out/opponent-roster.txt/.json (names, IDs; never commit).
 
 ## Next steps
 - Task 2 (buy-type round library) builds on `opponentRounds()` + buy labels in core.mjs/analysis.mjs.
