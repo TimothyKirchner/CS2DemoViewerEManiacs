@@ -24,8 +24,9 @@ CS2 exited; all 12 settings files restored and byte-verified. OBS remains runnin
 ## 1.2.0 committed (2026-11-03, Frank's request)
 - The local 1.2.0 work is committed on this branch in 5 commits (9d8ad34..502280c) and pushed; it was
   already based on the current Git version. 97/97 unit tests, session and viewer smoke pass. Not released.
-- Next: opponent analyser, plan in Git-ignored `review-out/opponent-analyser-plan.md` (5 hub tasks, not queued
-  yet; start a `feature/opponent-analyser` branch from here).
+- Next: opponent analyser on branch `feature/opponent-analyser` (pushed). Plan incl. stand-in rules in
+  Git-ignored `review-out/opponent-analyser-plan.md`. Queued as hub tasks 3de4a075 (1/5 roster, base),
+  e6cfeb38, e0038ccf, 48b4252e, 70ed7d0c (hard, assigned to Claude, priority 50..10; 2-5 need task 1).
 
 ## Next steps
 - Per-match patterns (same killer / same spot repeatedly) on top of single rounds.
