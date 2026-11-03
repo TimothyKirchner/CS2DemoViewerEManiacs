@@ -84,7 +84,8 @@ export function roundFacts(entry,ref,map){
   // Route: T rounds by plant site (or "no plant"), CT rounds by where the first contact happened.
   const mine=contact&&(sideOfEvent(contact,'user')===side?'user':'attacker');
   const contactSite=contact?siteOf(map,contact[`${mine}_X`],contact[`${mine}_Y`]):null;
-  const route=side===2?(plantSite?`${plantSite} plant`:'no plant'):(contactSite?`contact ${contactSite}`:'no contact');
+  const known=s=>s&&s!=='unknown';
+  const route=side===2?(plant?(known(plantSite)?`${plantSite} plant`:'plant (site unknown)'):'no plant'):(contact?(known(contactSite)?`contact ${contactSite}`:'contact (site unknown)'):'no contact');
   const utility={smoke:0,flash:0,fire:0,he:0};
   const roster=new Set((round.frames.find(f=>f.tick>=round.live)??round.frames[0])?.players.filter(p=>p.team===side).map(p=>String(p.id))??[]);
   for(const fx of round.effects??[])if(UTILITY[fx.type]&&(fx.team===side||(!fx.team&&roster.has(String(fx.thrower)))))utility[fx.type]++;
