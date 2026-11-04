@@ -3,7 +3,7 @@ _Updated 2026-11-03 (Claude, hub task 70ed7d0c, opponent analyser 5/5)_
 
 ## Current task
 Opponent analyser on branch `feature/opponent-analyser` is complete (tasks 1-5). Nothing in progress.
-Branch is pushed, not merged into main; no PR yet.
+Branch is pushed; PR #2 to main is open (2026-11-04, no conflicts, no CI checks): https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2
 
 ## Done (task 5)
 - `web/opponent-report.mjs`: `opponentMapResults` (rounds, sides, match W/L per map), `vetoSuggestion` (ban their
@@ -23,7 +23,7 @@ Branch is pushed, not merged into main; no PR yet.
   Report and review in Git-ignored `review-out/opponent-report-test.md`.
 
 ## Next steps
-- Frank: review `review-out/opponent-report-test.md` and the tab; then decide on a PR to main.
+- Frank: review `review-out/opponent-report-test.md` and the tab; then merge PR #2.
 - Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
 
 ## Open issues
