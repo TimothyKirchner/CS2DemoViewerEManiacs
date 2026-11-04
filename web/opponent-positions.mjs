@@ -70,12 +70,49 @@ function placeSeconds(rows,{startSeconds,endSeconds}){
   return [...out].sort((a,b)=>b[1]-a[1]).map(([place,seconds])=>({place,seconds,share:total?seconds/total:0}));
 }
 
+// Hold spots: a player counts as holding while moving slower than HOLD_SPEED units/s (walking is ~130,
+// running ~250) between two samples. A cell counts for a round once someone holds there for at least
+// HOLD_MIN_SECONDS in the window. Exact spots shift a little between rounds, so a cell's round count
+// includes holds in its 8 neighbours, and only local peaks are kept (one dot per spot). Spots held in fewer
+// than HOLD_MIN_SHARE of the rounds (or in one round only, with 3+ rounds) are dropped, so walk-outs,
+// rotations and one-off spots do not show.
+export const HOLD_SPEED=80,HOLD_MIN_SECONDS=1,HOLD_MIN_SHARE=.2;
+function holdSpots(rows,{startSeconds,endSeconds},cellSize){
+  const cells=new Map(),perRound=[];
+  for(const row of rows){
+    const {round,rate}=row,start=round.live+startSeconds*rate,end=Math.min(round.end,round.live+endSeconds*rate),fr=round.frames,here=new Map();
+    for(let i=0;i<fr.length-1;i++){
+      const f=fr[i],n=fr[i+1],a=Math.max(start,f.tick),b=Math.min(end,n.tick,f.tick+rate*.5),dt=(n.tick-f.tick)/rate;
+      if(b<=a||!(dt>0))continue;const next=new Map(n.players.map(p=>[String(p.id),p]));
+      for(const p of f.players){
+        if(p.team!==row.side||!alive(p)||!Number.isFinite(p.x)||!Number.isFinite(p.y))continue;
+        const q=next.get(String(p.id));if(!q||!Number.isFinite(q.x)||Math.hypot(q.x-p.x,q.y-p.y)/dt>HOLD_SPEED)continue;
+        const k=`${Math.floor(p.x/cellSize)},${Math.floor(p.y/cellSize)}`,c=here.get(k)??{seconds:0,x:0,y:0},s=(b-a)/rate;
+        c.seconds+=s;c.x+=p.x*s;c.y+=p.y*s;here.set(k,c);
+      }
+    }
+    const held=new Set();
+    for(const [k,c] of here){if(c.seconds<HOLD_MIN_SECONDS)continue;held.add(k);
+      const g=cells.get(k)??{seconds:0,sx:0,sy:0};g.seconds+=c.seconds;g.sx+=c.x;g.sy+=c.y;cells.set(k,g);}
+    perRound.push(held);
+  }
+  const near=k=>{const [x,y]=k.split(',').map(Number),out=[];for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)out.push(`${x+dx},${y+dy}`);return out;};
+  for(const [k,g] of cells){const n=near(k);g.rounds=perRound.filter(h=>n.some(c=>h.has(c))).length;g.near=n;}
+  // Local peaks: no neighbour with more rounds (ties go to the cell with more hold seconds).
+  return [...cells].filter(([k,g])=>g.near.every(c=>c===k||!cells.has(c)||(cells.get(c).rounds<g.rounds||cells.get(c).rounds===g.rounds&&cells.get(c).seconds<=g.seconds&&(cells.get(c).seconds<g.seconds||c>k))));
+}
+
 // Heatmap for one map, side and time window: the whole team (every round, stand-ins included) or one core player.
-export function positionHeatmap(entries,refs,{window='0-20',player='',cellSize=128}={}){
+// mode 'holds' (default) shows where they stand still and how often (share of rounds); 'all' shows all movement.
+export function positionHeatmap(entries,refs,{window='0-20',player='',cellSize=128,mode='holds'}={}){
   const w=WINDOWS.find(x=>x.id===window)??WINDOWS[0],rows=heatRows(entries,refs,player||null);
   const heat=aggregateHeatmap(rows,{startSeconds:w.startSeconds,endSeconds:w.endSeconds,cellSize});
   const rounds=player?new Set(rows.filter(r=>r.round.frames.some(f=>f.players.length)).map(r=>`${r.entry.id}:${r.roundIndex}`)).size:heat.rounds;
-  return {...heat,window:w,player,rounds,sample:`${rounds} ${rounds===1?'round':'rounds'}`,places:placeSeconds(rows,w)};
+  const out={...heat,mode,window:w,player,rounds,sample:`${rounds} ${rounds===1?'round':'rounds'}`,places:placeSeconds(rows,w)};
+  if(mode!=='holds')return out;
+  const minRounds=rounds>=3?2:1,points=holdSpots(rows,w,Math.min(cellSize,96)).map(([,g])=>({x:g.sx/g.seconds,y:g.sy/g.seconds,seconds:g.seconds,rounds:g.rounds,share:rounds?g.rounds/rounds:0}))
+    .filter(p=>p.rounds>=minRounds&&p.share>=HOLD_MIN_SHARE).sort((a,b)=>b.share-a.share);
+  return {...out,points,max:Math.max(0,...points.map(p=>p.share))};
 }
 
 const top=(values)=>{const m=new Map();for(const v of values)if(v)m.set(v,(m.get(v)??0)+1);return [...m].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0])));};
