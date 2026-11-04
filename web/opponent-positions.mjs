@@ -70,48 +70,66 @@ function placeSeconds(rows,{startSeconds,endSeconds}){
   return [...out].sort((a,b)=>b[1]-a[1]).map(([place,seconds])=>({place,seconds,share:total?seconds/total:0}));
 }
 
-// Hold spots: a player counts as holding while moving slower than HOLD_SPEED units/s (walking is ~130,
-// running ~250) between two samples. A cell counts for a round once someone holds there for at least
-// HOLD_MIN_SECONDS in the window. Exact spots shift a little between rounds, so a cell's round count
-// includes holds in its 8 neighbours, and only local peaks are kept (one dot per spot). Spots held in fewer
-// than HOLD_MIN_SHARE of the rounds (or in one round only, with 3+ rounds) are dropped, so walk-outs,
-// rotations and one-off spots do not show.
-export const HOLD_SPEED=80,HOLD_MIN_SECONDS=1,HOLD_MIN_SHARE=.2;
-function holdSpots(rows,{startSeconds,endSeconds},cellSize){
-  const cells=new Map(),perRound=[];
-  for(const row of rows){
-    const {round,rate}=row,start=round.live+startSeconds*rate,end=Math.min(round.end,round.live+endSeconds*rate),fr=round.frames,here=new Map();
-    for(let i=0;i<fr.length-1;i++){
-      const f=fr[i],n=fr[i+1],a=Math.max(start,f.tick),b=Math.min(end,n.tick,f.tick+rate*.5),dt=(n.tick-f.tick)/rate;
-      if(b<=a||!(dt>0))continue;const next=new Map(n.players.map(p=>[String(p.id),p]));
-      for(const p of f.players){
-        if(p.team!==row.side||!alive(p)||!Number.isFinite(p.x)||!Number.isFinite(p.y))continue;
-        const q=next.get(String(p.id));if(!q||!Number.isFinite(q.x)||Math.hypot(q.x-p.x,q.y-p.y)/dt>HOLD_SPEED)continue;
-        const k=`${Math.floor(p.x/cellSize)},${Math.floor(p.y/cellSize)}`,c=here.get(k)??{seconds:0,x:0,y:0},s=(b-a)/rate;
-        c.seconds+=s;c.x+=p.x*s;c.y+=p.y*s;here.set(k,c);
-      }
+// Hold spots. Step 1, per player and round: a dwell is time spent moving slower than HOLD_SPEED units/s
+// (walking is ~130, running ~250). Stationary samples within HOLD_RADIUS/2 of the open dwell's centre join it;
+// moving samples (jiggle peeks, short swings) do not end it; standing still somewhere farther away starts a
+// new dwell. Dwells shorter than `minSeconds` are dropped (stops during the walk-out).
+// Step 2, across rounds: dwells within HOLD_RADIUS (and HOLD_FLOOR_Z height, so stacked floors stay apart)
+// are clustered greedily, longest first, then reassigned once to the nearest final centre. A spot's share is
+// the rounds with a dwell there over all rounds; spots in fewer than 2 rounds (with 3+ rounds) or under
+// `minShare` are dropped, unless one player holds it in HOLD_MIN_PLAYER_SHARE of his own rounds (a player
+// who always plays one spot is a habit even when the team share is low, as on FACEIT Mappio's per-player view). Positions shift a little between rounds, so this beats fixed grid cells.
+export const HOLD_SPEED=80,HOLD_RADIUS=220,HOLD_FLOOR_Z=120,HOLD_MIN_SECONDS=2,HOLD_MIN_SHARE=.1,HOLD_MIN_PLAYER_SHARE=.25;
+const near=(a,b,r)=>Math.hypot(a.x-b.x,a.y-b.y)<=r&&!(Number.isFinite(a.z)&&Number.isFinite(b.z)&&Math.abs(a.z-b.z)>HOLD_FLOOR_Z);
+function dwells(row,{startSeconds,endSeconds},minSeconds){
+  const {round,rate}=row,start=round.live+startSeconds*rate,end=Math.min(round.end,round.live+endSeconds*rate),fr=round.frames,open=new Map(),out=[];
+  const key=`${row.entry.id}:${row.roundIndex}`,centre=d=>({x:d.sx/d.seconds,y:d.sy/d.seconds,z:d.sz/d.seconds});
+  const close=id=>{const d=open.get(id);open.delete(id);if(d&&d.seconds>=minSeconds)out.push({...centre(d),seconds:d.seconds,places:d.places,player:id,round:key});};
+  for(let i=0;i<fr.length-1;i++){
+    const f=fr[i],n=fr[i+1],a=Math.max(start,f.tick),b=Math.min(end,n.tick,f.tick+rate*.5),dt=(n.tick-f.tick)/rate;
+    if(b<=a||!(dt>0))continue;const next=new Map(n.players.map(p=>[String(p.id),p]));
+    for(const p of f.players){
+      if(p.team!==row.side||!alive(p)||!Number.isFinite(p.x)||!Number.isFinite(p.y))continue;
+      const id=String(p.id),q=next.get(id);if(!q||!Number.isFinite(q.x)||Math.hypot(q.x-p.x,q.y-p.y)/dt>HOLD_SPEED)continue;
+      const z=Number.isFinite(p.z)?p.z:0,s=(b-a)/rate;let d=open.get(id);
+      if(d&&!near({x:p.x,y:p.y,z},centre(d),HOLD_RADIUS/2)){close(id);d=null;}
+      if(!d){d={seconds:0,sx:0,sy:0,sz:0,places:new Map()};open.set(id,d);}
+      d.seconds+=s;d.sx+=p.x*s;d.sy+=p.y*s;d.sz+=z*s;const pl=p.place||'unknown';d.places.set(pl,(d.places.get(pl)??0)+s);
     }
-    const held=new Set();
-    for(const [k,c] of here){if(c.seconds<HOLD_MIN_SECONDS)continue;held.add(k);
-      const g=cells.get(k)??{seconds:0,sx:0,sy:0};g.seconds+=c.seconds;g.sx+=c.x;g.sy+=c.y;cells.set(k,g);}
-    perRound.push(held);
   }
-  const near=k=>{const [x,y]=k.split(',').map(Number),out=[];for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++)out.push(`${x+dx},${y+dy}`);return out;};
-  for(const [k,g] of cells){const n=near(k);g.rounds=perRound.filter(h=>n.some(c=>h.has(c))).length;g.near=n;}
-  // Local peaks: no neighbour with more rounds (ties go to the cell with more hold seconds).
-  return [...cells].filter(([k,g])=>g.near.every(c=>c===k||!cells.has(c)||(cells.get(c).rounds<g.rounds||cells.get(c).rounds===g.rounds&&cells.get(c).seconds<=g.seconds&&(cells.get(c).seconds<g.seconds||c>k))));
+  for(const id of [...open.keys()])close(id);
+  return out;
+}
+function holdSpots(rows,w,minSeconds){
+  const all=rows.flatMap(r=>dwells(r,w,minSeconds)).sort((a,b)=>b.seconds-a.seconds);
+  const add=(c,d)=>{c.seconds+=d.seconds;c.sx+=d.x*d.seconds;c.sy+=d.y*d.seconds;c.sz+=d.z*d.seconds;c.x=c.sx/c.seconds;c.y=c.sy/c.seconds;c.z=c.sz/c.seconds;};
+  let clusters=[];
+  for(const d of all){const c=clusters.filter(c=>near(d,c,HOLD_RADIUS)).sort((a,b)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(b.x-d.x,b.y-d.y))[0];
+    if(c)add(c,d);else{const n={seconds:0,sx:0,sy:0,sz:0};add(n,d);clusters.push(n);}}
+  // One reassignment pass to the nearest final centre (greedy order otherwise drifts the borders).
+  const centres=clusters.map(c=>({x:c.x,y:c.y,z:c.z,seconds:0,sx:0,sy:0,sz:0,rounds:new Set(),players:new Map(),places:new Map()}));
+  for(const d of all){const c=centres.filter(c=>near(d,c,HOLD_RADIUS)).sort((a,b)=>Math.hypot(a.x-d.x,a.y-d.y)-Math.hypot(b.x-d.x,b.y-d.y))[0];if(!c)continue;
+    add(c,d);c.rounds.add(d.round);if(!c.players.has(d.player))c.players.set(d.player,new Set());c.players.get(d.player).add(d.round);for(const [k,v] of d.places)c.places.set(k,(c.places.get(k)??0)+v);}
+  return centres.filter(c=>c.rounds.size);
 }
 
 // Heatmap for one map, side and time window: the whole team (every round, stand-ins included) or one core player.
-// mode 'holds' (default) shows where they stand still and how often (share of rounds); 'all' shows all movement.
-export function positionHeatmap(entries,refs,{window='0-20',player='',cellSize=128,mode='holds'}={}){
+// mode 'holds' (default) lists the spots they stand still on and how often (share of rounds); 'all' shows all movement.
+export function positionHeatmap(entries,refs,{window='0-20',player='',cellSize=128,mode='holds',minSeconds=HOLD_MIN_SECONDS,minShare=HOLD_MIN_SHARE}={}){
   const w=WINDOWS.find(x=>x.id===window)??WINDOWS[0],rows=heatRows(entries,refs,player||null);
   const heat=aggregateHeatmap(rows,{startSeconds:w.startSeconds,endSeconds:w.endSeconds,cellSize});
   const rounds=player?new Set(rows.filter(r=>r.round.frames.some(f=>f.players.length)).map(r=>`${r.entry.id}:${r.roundIndex}`)).size:heat.rounds;
   const out={...heat,mode,window:w,player,rounds,sample:`${rounds} ${rounds===1?'round':'rounds'}`,places:placeSeconds(rows,w)};
   if(mode!=='holds')return out;
-  const minRounds=rounds>=3?2:1,points=holdSpots(rows,w,Math.min(cellSize,96)).map(([,g])=>({x:g.sx/g.seconds,y:g.sy/g.seconds,seconds:g.seconds,rounds:g.rounds,share:rounds?g.rounds/rounds:0}))
-    .filter(p=>p.rounds>=minRounds&&p.share>=HOLD_MIN_SHARE).sort((a,b)=>b.share-a.share);
+  // Rounds each player was alive in the window, for per-player shares.
+  const played=new Map();for(const r of rows){const k=`${r.entry.id}:${r.roundIndex}`,start=r.round.live+w.startSeconds*r.rate,end=r.round.live+w.endSeconds*r.rate;
+    for(const f of r.round.frames){if(f.tick<start||f.tick>end)continue;for(const p of f.players)if(p.team===r.side&&alive(p)){const id=String(p.id);if(!played.has(id))played.set(id,new Set());played.get(id).add(k);}}}
+  const minRounds=rounds>=3?2:1,points=holdSpots(rows,w,minSeconds).map(c=>{
+      const holders=[...c.players].map(([id,set])=>({id,rounds:set.size,of:played.get(id)?.size??set.size,share:set.size/(played.get(id)?.size||set.size)})).sort((a,b)=>b.rounds-a.rounds||b.share-a.share);
+      return {x:c.x,y:c.y,z:c.z,seconds:c.seconds,rounds:c.rounds.size,players:holders.length,holders,main:holders[0],
+        place:[...c.places].sort((a,b)=>b[1]-a[1])[0]?.[0]??'unknown',share:rounds?c.rounds.size/rounds:0,avgSeconds:c.seconds/c.rounds.size};})
+    .filter(p=>p.rounds>=minRounds&&(p.share>=minShare||p.holders.some(h=>h.rounds>=minRounds&&h.share>=HOLD_MIN_PLAYER_SHARE)))
+    .sort((a,b)=>b.share-a.share||b.seconds-a.seconds).map((p,i)=>({...p,rank:i+1}));
   return {...out,points,max:Math.max(0,...points.map(p=>p.share))};
 }
 

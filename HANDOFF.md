@@ -6,14 +6,15 @@ Opponent analyser on branch `feature/opponent-analyser`; PR #2 to main open:
 https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2. Nothing in progress.
 
 ## Done (2026-11-05)
-- Positions heatmap (Analyse opponent tab) now defaults to "Hold spots (standing still)":
-  `positionHeatmap(..., {mode:'holds'})` in `web/opponent-positions.mjs` counts samples where a player moves
-  < 80 u/s, a cell counts for a round after >= 1 s held, round counts include the 8 neighbour cells (96-unit
-  cells), only local peaks are kept, spots under 20 % of rounds (or 1 round with 3+ rounds) are dropped.
-- UI: new "Show" select (Hold spots / All movement); hold dots sized/coloured by share of rounds, % labels on
-  spots >= 35 %; "all movement" no longer has a 15 % opacity floor (cells < 5 % of max hidden).
-- Test added (130/130 pass). Real check, 4 demos in Downloads/demos/28_10: CT ancient 0-20 s went from 278
-  painted cells to 5 hold spots (top 65 %), anubis 291 -> 6 (top 67 %).
+- Positions radar (Analyse opponent tab) defaults to "Hold spots": `positionHeatmap(..., {mode:'holds'})` in
+  `web/opponent-positions.mjs`. Per player and round it finds dwells (moving < 80 u/s, >= 2 s, new dwell when
+  standing still > 110 units away), clusters dwells across rounds (220 units, 120 z for floors), and keeps
+  spots seen in 2+ rounds with >= 10 % team share or >= 25 % of one player's own rounds (per-player idea from
+  FACEIT Mappio, whose method is not public). Each spot: callout, team share, main holder + share of his rounds.
+- UI: numbered dots coloured by main player (grey = stand-in), table # / callout / team rounds / main player /
+  others; "Show" select keeps "All movement" (no 15 % opacity floor now).
+- Real check (Downloads/demos/28_10): 6-17 spots per CT window instead of 278-413 painted cells.
+- Tests 130/130; session smoke passes (select count 6 -> 7 fixed; it broke in 24db5fc).
 
 ## Done earlier (task 5)
 - Anti-strat report, veto suggestion, side habits, economy/stand-in notes, report script; see git log.
@@ -23,8 +24,7 @@ https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2. Nothing in prog
 - Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
 
 ## Open issues
-- Hold thresholds (80 u/s, 1 s, 20 %) are heuristics; tune after visual review.
-- Callout table under the radar still uses all movement time, not hold time.
+- Hold thresholds (80 u/s, 2 s, 220 units, 10 % / 25 %) are heuristics; tune after Frank's visual review.
 - Zones: 1400-unit site radius puts some mid callouts (anubis Middle, ancient Outside) into a site zone.
 - Veto uses only opponent results; 1 anubis demo. Timeout caller not in parsed data.
 - Recorder blocked (CS2 exits while loading demos). Public release remains UNAPPROVED.

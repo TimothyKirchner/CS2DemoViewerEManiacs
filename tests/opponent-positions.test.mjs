@@ -88,11 +88,14 @@ test('heatmaps cover the team or one player per time window, with callouts',()=>
 
 test('hold-spot heatmap keeps only spots held in many rounds, not walk paths',()=>{
   const {entries,refs}=setup(),ct=refs.filter(r=>r.side===3);
-  const holds=positionHeatmap(entries,ct,{window:'0-20'});
+  // Synthetic frames are sparse (0.5 s per sample), so allow 1 s dwells.
+  const holds=positionHeatmap(entries,ct,{window:'0-20',minSeconds:1});
   assert.equal(holds.mode,'holds');assert.ok(holds.points.length>0);
   // Synthetic CTs stand on A, mid and B; every kept point sits on one of those spots.
   for(const p of holds.points)assert.ok([2000,0,-2000].some(x=>Math.abs(p.x-x)<1),`unexpected spot at ${p.x}`);
-  assert.ok(holds.points.every(p=>p.share>=.2&&p.rounds>=2));
+  assert.ok(holds.points.every(p=>p.rounds>=2&&p.main&&p.rank>=1));
+  // o4 and o5 both hold B: one spot, two holders, each in all their CT rounds.
+  const b=holds.points.find(p=>Math.abs(p.x+2000)<1);assert.equal(b.place,'BombsiteB');assert.ok(b.holders.length>=2);assert.ok(b.main.share>.8);
   // Catwalk is held in one round only, so it is dropped.
   assert.ok(!holds.points.some(p=>Math.abs(p.x-600)<1));
   const all=positionHeatmap(entries,ct,{window:'0-20',mode:'all'});

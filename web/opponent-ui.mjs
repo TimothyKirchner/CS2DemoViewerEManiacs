@@ -33,17 +33,18 @@ export function initOpponent(container,api){
   // Positions: filters, radar heatmap (team or one core player) and setup tables for the chosen map and side.
   const pos={map:'',side:'3',buyType:'',score:'',window:'0-20',player:'',mode:'holds'};let drawRevision=0;
   const select=(name,label,options,value)=>`<label>${esc(label)} <select data-pos="${name}">${options.map(([v,t])=>`<option value="${esc(v)}" ${String(v)===String(value)?'selected':''}>${esc(t)}</option>`).join('')}</select></label>`;
-  function drawHeat(heat,mapDef){
+  function drawHeat(heat,mapDef,colourOf){
     const revision=++drawRevision,canvas=el('radar'),ctx=canvas.getContext('2d');ctx.clearRect(0,0,512,512);ctx.fillStyle='#141c29';ctx.fillRect(0,0,512,512);
     const paint=()=>{if(!mapDef?.scale){ctx.fillStyle='#d7dfeb';ctx.fillText('No calibrated radar for this map.',15,30);return;}
       const px=p=>[(p.x-mapDef.x)/mapDef.scale/2,(mapDef.y-p.y)/mapDef.scale/2];
-      if(heat.mode==='holds'){ // hold spots: size and colour by share of rounds, label the strong ones
-        for(const p of [...heat.points].reverse()){const [x,y]=px(p),t=p.share/(heat.max||1),r=Math.max(5,(6+10*t)*Math.min(1.5,1/mapDef.scale));
-          const g=ctx.createRadialGradient(x,y,0,x,y,r*2);g.addColorStop(0,`rgba(255,${Math.round(200-150*t)},40,${.45+.5*t})`);g.addColorStop(1,'rgba(255,80,40,0)');
-          ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r*2,0,Math.PI*2);ctx.fill();}
-        ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-        for(const p of heat.points.filter(p=>p.share>=.35).slice(0,12)){const [x,y]=px(p),txt=`${Math.round(p.share*100)}%`;ctx.lineWidth=3;ctx.strokeStyle='#000';ctx.strokeText(txt,x,y+4);ctx.fillStyle='#fff';ctx.fillText(txt,x,y+4);}
-        ctx.textAlign='start';if(!heat.points.length){ctx.fillStyle='#d7dfeb';ctx.fillText('No spot held in 20 % of these rounds.',15,30);}return;}
+      if(heat.mode==='holds'){ // hold spots: one numbered dot per spot, coloured by its main holder, size by share of rounds
+        const colour=colourOf??(()=>'#ff9f2c');
+        for(const p of [...heat.points].reverse()){const [x,y]=px(p),t=p.share/(heat.max||1),r=7+7*t,c=colour(p.main?.id);
+          const g=ctx.createRadialGradient(x,y,0,x,y,r*2.2);g.addColorStop(0,c+'cc');g.addColorStop(1,c+'00');ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r*2.2,0,Math.PI*2);ctx.fill();
+          ctx.fillStyle=c;ctx.strokeStyle='#000';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,r*.75,0,Math.PI*2);ctx.fill();ctx.stroke();}
+        ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+        for(const p of heat.points){const [x,y]=px(p);ctx.fillStyle='#000';ctx.fillText(String(p.rank),x,y+3.5);}
+        ctx.textAlign='start';if(!heat.points.length){ctx.fillStyle='#d7dfeb';ctx.fillText('No repeated hold spot for these filters.',15,30);}return;}
       for(const p of heat.points){const [x,y]=px(p),t=p.seconds/(heat.max||1);if(t<.05)continue;ctx.fillStyle=`rgba(255,153,44,${.8*t})`;ctx.beginPath();ctx.arc(x,y,Math.max(3,64/mapDef.scale),0,Math.PI*2);ctx.fill();}};
     if(mapDef?.image){const img=new Image();img.onload=()=>{if(revision!==drawRevision)return;ctx.drawImage(img,0,0,512,512);paint();};img.onerror=()=>{if(revision===drawRevision)paint();};img.src=mapDef.image;}else paint();
   }
@@ -57,8 +58,12 @@ export function initOpponent(container,api){
       select('window','Time',WINDOWS.map(w=>[w.id,w.label]),pos.window),select('mode','Show',[['holds','Hold spots (standing still)'],['all','All movement']],pos.mode),select('player','Players',[['','Whole team (all rounds)'],...core.map(p=>[p.id,`${p.name} (core)`])],pos.player)].join('');
     const mapDefs=api.getMapDefs?.()??{},filters={map:pos.map,side:pos.side,buyType:pos.buyType,score:pos.score};
     const kept=filterRounds(refs,filters,{buyRounds:lib.rounds,scores:roundScores(entries,d)}),heat=positionHeatmap(entries,kept,{window:pos.window,player:pos.player,mode:pos.mode});
-    drawHeat(heat,mapDefs[pos.map]);
-    el('places').innerHTML=`<p>${esc(heat.window.label)}, ${pos.player?esc(core.find(p=>p.id===pos.player)?.name??''):'whole team'}: ${esc(heat.sample)} of ${refs.filter(r=>r.map===pos.map&&r.side===Number(pos.side)).length}; ${heat.mode==='holds'?`${heat.points.length} hold spots held in 20 %+ of rounds (% = share of rounds)`:`${heat.playerSeconds.toFixed(0)} player seconds`}.</p>${table(['Callout','Share of time'],heat.places.slice(0,10).map(x=>[esc(x.place),`${Math.round(x.share*100)}%`]))}`;
+    const PALETTE=['#ff9f2c','#3fb6ff','#7ee06a','#ff5fa2','#c38bff'],colourOf=id=>{const i=core.findIndex(p=>p.id===id);return i>=0?PALETTE[i%PALETTE.length]:'#a8b0bd';},nameOf=id=>core.find(p=>p.id===id)?.name??'stand-in';
+    drawHeat(heat,mapDefs[pos.map],colourOf);
+    el('places').innerHTML=`<p>${esc(heat.window.label)}, ${pos.player?esc(core.find(p=>p.id===pos.player)?.name??''):'whole team'}: ${esc(heat.sample)} of ${refs.filter(r=>r.map===pos.map&&r.side===Number(pos.side)).length}; ${heat.mode==='holds'?`${heat.points.length} repeated hold spots (standing still 2 s+).`:`${heat.playerSeconds.toFixed(0)} player seconds.`}</p>${heat.mode==='holds'
+      ?table(['#','Callout','Team rounds','Main player','Others'],heat.points.slice(0,15).map(p=>[String(p.rank),esc(p.place),`${Math.round(p.share*100)}% (${p.rounds})`,
+        `<span style="color:${colourOf(p.main?.id)}">●</span> ${esc(nameOf(p.main?.id))} ${Math.round((p.main?.share??0)*100)}% of his rounds`,esc(p.holders.slice(1).map(h=>`${nameOf(h.id)} ${h.rounds}`).join(', '))]))
+      :table(['Callout','Share of time'],heat.places.slice(0,10).map(x=>[esc(x.place),`${Math.round(x.share*100)}%`]))}`;
     const a=positionAnalysis(entries,d,refs,{mapDefs,buyRounds:lib.rounds,filters}),m=a.maps[0],s=m?(pos.side==='3'?m.ct:m.t):null;
     if(!s||!s.rounds){el('positions').innerHTML=`<p class="muted">No ${pos.side==='3'?'CT':'T'} rounds with position samples for these filters (${a.rounds} of ${a.of} rounds pass the filters).</p>`;return;}
     const who=list=>list.map(h=>`${esc(h.label)} ${h.count}`).join(', ');
