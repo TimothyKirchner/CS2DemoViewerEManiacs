@@ -1,9 +1,15 @@
-STRAT SCOPE 1.1.1 — WINDOWS x64
+STRAT SCOPE 1.2.0 — WINDOWS x64
 
 GET STARTED
-1. Double-click Strat-Scope-1.1.1-Windows-x64.exe.
-2. Click Open demo (or use Ctrl+O) and choose an extracted CS2 .dem file.
+1. Double-click Strat-Scope-1.2.0-Windows-x64.exe.
+2. Click Import demos (or use Ctrl+O) and select one or several extracted
+   CS2 .dem files, .strats replays or a .stratsession review bundle.
 3. Choose a round or click Pistol strats, then use the playback controls.
+4. Open Review session for match switching, combined filters, playlists,
+   statistics and cross-match scouting. Give the same team the same name
+   across imports to combine its results. Unknown team names stay separate.
+5. Export session before closing to retain the imported matches and clips.
+   Share that file for offline team review; voice files must be reattached.
 
 This is a portable application: it does not need installation, administrator
 rights, Python, Node.js, a separately installed browser, or a paid API.
@@ -17,6 +23,14 @@ The viewer works offline. Selected demos are not uploaded. Only deliberately
 opening a source-credit link launches an external website in your browser.
 
 FEATURES
+- Multiple-demo review session, combined round filters, editable clips and
+  ordered cross-match playlists; portable session import/export.
+- Player/team/weapon/map/economy statistics and imported-player rankings.
+  ADR needs parsed damage events; incomplete data is shown as unavailable.
+- Cross-match occupancy, area/time search, recurring pattern candidates,
+  observed role hints, manual veto scenarios and HTML/Markdown prep reports.
+- Local voice recording synchronization, with per-match offset and volume.
+- Selected-player position/angle copy and previous/next kill navigation.
 - Recorded shooting direction flashes and optional approximate flashbang reach.
 - Map icons show the best carried weapon, armor amount/helmet and grenades.
   Weapon, armor and grenade layers each have an independent toggle.
@@ -37,7 +51,7 @@ FEATURES
 - Kill/bomb events, timestamped notes, replay export/import, custom radar.
 
 SHORTCUTS
-Ctrl+O          Open demo
+Ctrl+O          Import demos
 Ctrl+Shift+S    Export replay
 Space           Play/pause
 Left/Right      Seek five seconds
@@ -45,6 +59,8 @@ Left/Right      Seek five seconds
 P               Pistol strats
 L               Loop current round
 Home            Restart round
+, / .           Previous/next kill
+C               Clip/bookmark panel
 F11             Fullscreen window
 F1              Help
 
@@ -63,6 +79,13 @@ it did not return. This update adds diagnostics; it does not claim to fix
 the underlying "Entity not found" parser failure.
 
 KNOWN LIMITS
+- Sessions live in memory; export them before closing. Import fewer demos
+  if available RAM is limited. No cloud storage or automatic demo download.
+- Statistics describe imported evidence only. Unknown/POV visibility and
+  legacy exports restrict ADR/KAST/clutch calculations. Reimport raw demos
+  to obtain new event coverage. See LOCAL_REVIEW.md for definitions.
+- Role and pattern labels are observations and heuristics. Veto scenarios
+  are manual scenarios, not predictions. Voice recordings are user supplied.
 - Smoke/fire footprint shapes are approximate, not exact smoke volumes or
   flame spread. Available start/expiry events are read from the demo; a ~
   marks estimated lifetimes when events are missing.
@@ -94,6 +117,10 @@ DEPENDENCIES AND CREDITS
 Electron 45.0.0, electron-builder 26.15.3. Exact dependencies are locked in
 package-lock.json. Runtime license notices ship inside the portable package.
 See THIRD_PARTY_NOTICES.txt for parser and map sources.
+
+VERSION 1.2.0
+Adds the local multi-demo review and scouting workflow described above.
+See LOCAL_REVIEW.md for usage, definitions and limits.
 
 VERSION 1.1.1
 Adds offline opponent scouting, heatmaps, equipment and shot visualization.

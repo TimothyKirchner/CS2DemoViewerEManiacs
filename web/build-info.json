@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Strat Scope",
-    "version": "1.1.1"
+    "version": "1.2.0"
   },
   "parser": {
     "name": "demoparser2",

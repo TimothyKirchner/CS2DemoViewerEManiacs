@@ -45,7 +45,7 @@ function menuAction(action) {
 function installMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {label: "File", submenu: [
-      {label: "Open demo…", accelerator: "CmdOrCtrl+O", click: () => menuAction("open")},
+      {label: "Import demos…", accelerator: "CmdOrCtrl+O", click: () => menuAction("open")},
       {label: "Export replay…", accelerator: "CmdOrCtrl+Shift+S", click: () => menuAction("export")},
       {type: "separator"},
       {role: "quit"}
@@ -116,11 +116,13 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === "fullscreen"));
     session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === "fullscreen");
     session.defaultSession.on("will-download", (_event, item) => {
-      const diagnostic = item.getFilename().endsWith(".json");
+      const extension = path.extname(item.getFilename()).slice(1).toLowerCase();
+      const formats = {json: "Diagnostic report", strats: "Strat Scope replay", stratsession: "Strat Scope session", md: "Preparation report", html: "Preparation report", csv: "Statistics"};
+      const label = formats[extension] || "Strat Scope export";
       item.setSaveDialogOptions({
-        title: diagnostic ? "Save import diagnostic report" : "Save Strat Scope replay",
+        title: "Save " + label.toLowerCase(),
         defaultPath: path.join(app.getPath("downloads"), path.basename(item.getFilename())),
-        filters: [diagnostic ? {name: "Diagnostic report", extensions: ["json"]} : {name: "Strat Scope replay", extensions: ["strats"]}, {name: "All files", extensions: ["*"]}]
+        filters: [...(formats[extension] ? [{name: label, extensions: [extension]}] : []), {name: "All files", extensions: ["*"]}]
       });
     });
     installMenu();

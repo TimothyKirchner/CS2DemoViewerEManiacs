@@ -20,6 +20,7 @@ const CONTENT_SECURITY_POLICY = [
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline' data:",
   "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
   "connect-src 'self'",
   "worker-src 'self' blob:",
   "object-src 'none'",

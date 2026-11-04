@@ -1,9 +1,13 @@
 import {frameAt,activeEffects,worldToRadar,nextRoundIndex,validateReplay,effectForPath,formatLoadout,visibleGunshots} from "./core.mjs";
 import {analyzeReplay,buildHeatmap} from "./analysis.mjs";
 import {wrapLabel,placeLabel} from "./map-labels.mjs";
-import {getLoadoutIcons,drawLoadoutIcon} from "./loadout-icons.mjs";
+import {getLoadoutIcons,drawLoadoutIcon,layoutLoadoutIcons} from "./loadout-icons.mjs";
 import {beginStep,finishReport} from "./diagnostics.mjs";
 import {startDiagnostics,saveDiagnostics,cancelDiagnostics,showDiagnostics,showImportFailure} from "./diagnostics-ui.mjs";
+import {makeEntry,replayKey,readBundle} from './session.mjs';
+import {initSession} from './session-ui.mjs';
+import {normalizeOverrides} from './opponent.mjs';
+let opponentOverrides=normalizeOverrides();
 const $=id=>document.getElementById(id),escape=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 const colors={2:"#edb65d",3:"#70b9e9",smoke:"#b7cbd5",fire:"#ff8455",flash:"#f5e9a0",he:"#dd9bb5",decoy:"#a6cfab"};
 const labels={smoke:"Smoke",fire:"Molotov / incendiary",flash:"Flashbang",he:"HE grenade",decoy:"Decoy"};
@@ -11,18 +15,31 @@ const S={replay:null,index:0,tick:0,playing:false,speed:1,mode:"normal",loop:fal
 const canvas=$("radar"),ctx=canvas.getContext("2d"),mapImages=new Map();let mapDefs={},mapDef=null,mapImage=null,lastTime=0,lastPanel=0,renderId,drag=null,toastTimer,loadToken=0;
 const clock=seconds=>{seconds=Math.max(0,Math.floor(seconds));return String(Math.floor(seconds/60)).padStart(2,"0")+":"+String(seconds%60).padStart(2,"0");};
 const round=()=>S.replay?.rounds[S.index];
+const entries=[],clips=[],audioTracks=new Map(),fileHashes=new Set();let currentEntry=null,queue=[],queueRunning=false,queueCancelled=false,cancelPending=null,sequence=null,sequenceBusy=false,review;
+function flushEntry(){if(currentEntry){currentEntry.replay.notes=S.notes;currentEntry.replay.customMap=S.customMap;}}
+async function activateEntry(entry){setPlaying(false);flushEntry();for(const a of audioTracks.values())a.audio.pause();currentEntry=entry;await loadReplay(entry.replay);review?.refresh();}
+async function addReplay(replay,metadata={}){const key=await replayKey(replay),duplicate=entries.find(e=>e.contentKey===key);if(duplicate){toast('Duplicate replay skipped: '+replay.source);return duplicate;}const entry=makeEntry(replay,{...metadata,id:entries.some(e=>e.id===metadata.id)?undefined:metadata.id});entry.contentKey=key;entries.push(entry);await activateEntry(entry);return entry;}
+async function openRound(entryId,index,tick,play=false){const entry=entries.find(e=>e.id===entryId);if(!entry)return;if(currentEntry!==entry)await activateEntry(entry);setIndex(index,{play:false});if(Number.isFinite(tick))seek(tick);setPlaying(play);}
+async function playSequence(refs){if(!refs.length)return;sequence={refs:refs.map(r=>({...r})),index:0};await advanceSequence(false);}
+async function advanceSequence(advance=true){if(!sequence||sequenceBusy)return;sequenceBusy=true;try{if(advance)sequence.index++;const ref=sequence.refs[sequence.index];if(!ref){sequence=null;setPlaying(false);toast('Review sequence complete.',3000);return;}await openRound(ref.entryId,ref.roundIndex,ref.start,true);$('mode-label').textContent=`Review ${sequence.index+1} / ${sequence.refs.length}`;}finally{sequenceBusy=false;}}
+function detachVoice(id){const track=audioTracks.get(id);if(track){track.audio.pause();URL.revokeObjectURL(track.url);audioTracks.delete(id);}const entry=entries.find(e=>e.id===id);if(entry)entry.voice=null;}
+async function attachVoice(id,file){if(!file)return;const entry=entries.find(e=>e.id===id);if(!entry)return;const settings=entry.voice;detachVoice(id);const url=URL.createObjectURL(file),audio=new Audio(url);audio.preload='auto';audio.preservesPitch=true;audio.addEventListener('error',()=>toast('The recording could not be decoded. Try WAV, MP3 or Ogg.'));entry.voice={name:file.name,offset:settings?.offset??0,volume:settings?.volume??1};audioTracks.set(id,{audio,url,blocked:false});syncVoice();}
+function syncVoice(){const track=audioTracks.get(currentEntry?.id);if(!track)return;const {audio}=track,voice=currentEntry.voice,target=S.tick/rate()-(voice?.offset??0);audio.volume=Math.max(0,Math.min(1,voice?.volume??1));audio.playbackRate=S.speed;if(target<0||Number.isFinite(audio.duration)&&target>=audio.duration||!S.playing){audio.pause();if(target>=0&&Number.isFinite(audio.duration)&&target<audio.duration&&Math.abs(audio.currentTime-target)>.2)audio.currentTime=target;return;}if(Math.abs(audio.currentTime-target)>.25)audio.currentTime=target;if(audio.paused&&!track.blocked){track.blocked=true;audio.play().then(()=>{track.blocked=false;if(!S.playing||audioTracks.get(currentEntry?.id)!==track)audio.pause();}).catch(()=>toast('Click Play to allow the attached recording.'));}}
+function download(text,filename){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);}
+async function importFiles(files){queue.push(...files);if(queueRunning)return;queueRunning=true;queueCancelled=false;let done=0,failed=0;while(queue.length&&!queueCancelled){const file=queue.shift();review?.setStatus(`Importing ${file.name} · ${queue.length} queued`);try{const result=await openFile(file);if(result==='failed')failed++;else if(result!=='cancelled')done++;}catch(e){failed++;toast(file.name+': '+e.message);}review?.setStatus(`${done} imported · ${failed} failed · ${queue.length} queued`);}queue=[];queueRunning=false;review?.refresh();review?.setStatus(`${done} processed · ${failed} failed${queueCancelled?' · queue cancelled':''}`);}
 const rate=()=>S.replay?.tickRate??64;
 const startTick=r=>S.freeze?r.live:r.start;
 const name=id=>S.replay?.players.find(p=>p.id===String(id))?.name??"Unknown";
 const focused=id=>S.team==="all"||S.startTeams.get(String(id))===Number(S.team);
 function toast(message,ms=6500){$("toast").textContent=message;$("toast").hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("toast").hidden=true,ms);}
 function dirty(){S.rosterStamp="";S.eventStamp="";}
-function setPlaying(value){S.playing=Boolean(value&&S.replay);$("play").textContent=S.playing?"Ⅱ":"▶";$("play").setAttribute("aria-label",S.playing?"Pause":"Play");}
+function setPlaying(value){S.playing=Boolean(value&&S.replay);const track=audioTracks.get(currentEntry?.id);if(track&&S.playing)track.blocked=false;$("play").textContent=S.playing?"Ⅱ":"▶";$("play").setAttribute("aria-label",S.playing?"Pause":"Play");syncVoice();}
 function resetView(){S.zoom=1;S.panX=0;S.panY=0;$("zoom-reset").textContent="100%";}
 function setZoom(value){S.zoom=Math.max(.65,Math.min(4,value));$("zoom-reset").textContent=Math.round(S.zoom*100)+"%";}
 function visibleFloor(z){return !mapDef?.lower||S.floor==="all"||(S.floor==="lower"?z<mapDef.splitZ:z>=mapDef.splitZ);}
 function setIndex(index,{keepMode=false,play=S.playing}={}){
   if(!S.replay||index<0||index>=S.replay.rounds.length)return;
+  if(!keepMode&&!sequenceBusy)sequence=null;
   S.index=index;S.tick=startTick(round());if(!keepMode)S.mode="normal";
   dirty();renderRoundControls();renderEventList();renderNotes();setPlaying(play);
 }
@@ -32,7 +49,7 @@ function startPistols(){
   setIndex(S.replay.pistols[0],{keepMode:true,play:true});
   if(S.replay.pistols.length<2)toast("Only the first pistol is available in this recording. Playback will stop at its end.");
 }
-function seek(tick){if(!round())return;S.tick=Math.max(startTick(round()),Math.min(round().end,tick));dirty();}
+function seek(tick){if(!round())return;S.tick=Math.max(startTick(round()),Math.min(round().end,tick));dirty();syncVoice();}
 function renderRoundControls(){
   if(!S.replay)return;
   const r=round();$("round-label").textContent=`ROUND ${String(r.number).padStart(2,"0")}`;
@@ -76,12 +93,11 @@ async function chooseMap(){
   catch{$("map-error").hidden=false;$("map-error").textContent="The radar image could not be loaded. Open Help to provide a matching custom radar.";}
 }
 function noteKey(){const r=S.replay;return r?`stratscope-notes:${r.source}:${r.map}:${r.rounds.length}:${r.rounds.at(-1).end}`:"";}
-function saveNotes(){try{localStorage.setItem(noteKey(),JSON.stringify(S.notes));}catch{toast("Browser storage is full or unavailable. Export your replay to retain notes.");}}
+function saveNotes(){flushEntry();}
 async function loadReplay(replay,{sample=false}={}){
   validateReplay(replay);S.analysis=null;S.replay=replay;S.sample=sample;S.selected=null;S.team="all";S.index=0;S.mode="normal";S.customMap=replay.customMap??null;S.floor="upper";S.startTeams.clear();
   for(const r of replay.rounds)for(const p of r.frames.find(f=>f.tick>=r.live)?.players??[])if(!S.startTeams.has(p.id))S.startTeams.set(p.id,p.team);
   S.notes=Array.isArray(replay.notes)?replay.notes:[];
-  try{const saved=JSON.parse(localStorage.getItem(noteKey())??"null");if(Array.isArray(saved))S.notes=saved;}catch{}
   $("team-filter").value="all";$("floor-select").value="upper";$("file-name").textContent=replay.source;$("map-title").textContent=mapDefs[replay.map]?.name??replay.map;
   $("map-subtitle").textContent=`${replay.players.length} players · ${replay.rounds.length} rounds`;
   $("match-format").textContent="CS2";$("round-count").textContent=replay.rounds.length;
@@ -92,29 +108,32 @@ async function loadReplay(replay,{sample=false}={}){
   if(replay.warnings.length)toast(replay.warnings.join(" "),10000);
 }
 function loading(show,stage="Reading locally",pct=0){$("loading").hidden=!show;if(show){$("empty").hidden=true;$("loading-stage").textContent=stage;$("loading-progress").value=pct;}else if(!S.replay)$("empty").hidden=false;}
-function stopLoad(){cancelDiagnostics();loadToken++;S.worker?.terminate();S.worker=null;loading(false);}
+function stopLoad(){cancelDiagnostics();loadToken++;S.worker?.terminate();S.worker=null;loading(false);cancelPending?.('cancelled');cancelPending=null;}
 async function decodeReplay(buffer){let stream=new Blob([buffer]).stream();const b=new Uint8Array(buffer);if(b[0]===31&&b[1]===139){if(!globalThis.DecompressionStream)throw new Error("This browser cannot decompress replays. Use a recent Chrome, Edge or Firefox.");stream=stream.pipeThrough(new DecompressionStream("gzip"));}return JSON.parse(await new Response(stream).text());}
 async function openFile(file){
   if(!file)return;stopLoad();const token=loadToken;setPlaying(false);
+  let resolveImport;const finished=new Promise(resolve=>resolveImport=resolve);cancelPending=resolveImport;
   $("diagnostics-dialog").close();
   let report=await startDiagnostics(file);
   if(token!==loadToken)return;
   saveDiagnostics(report);
   const step=(stage,operation)=>{beginStep(report,stage,operation);saveDiagnostics(report);};
-  const fail=error=>{S.worker?.terminate();S.worker=null;loading(false);showImportFailure(report,error);};
+  const fail=error=>{S.worker?.terminate();S.worker=null;loading(false);showImportFailure(report,error);resolveImport('failed');cancelPending=null;};
   try{
     step("Checking selected file","validateFile");
-    if(!/\.(dem|strats|json)$/i.test(file.name))throw new Error("Choose an extracted .dem file or an exported .strats replay. Extract compressed archives first.");
+    if(!/\.(dem|strats|stratsession|json)$/i.test(file.name))throw new Error("Choose an extracted .dem, .strats replay or .stratsession bundle. Extract compressed archives first.");
     if(file.size>1.5*1024**3)throw new Error("This file exceeds the viewer's 1.5 GB input limit.");
     loading(true,"Reading "+file.name,1);
     step("Reading selected file","File.arrayBuffer");
     const buffer=await file.arrayBuffer();if(token!==loadToken)return;
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))).map(b=>b.toString(16).padStart(2,'0')).join('');if(token!==loadToken)return;
+    if(fileHashes.has(hash)){loading(false);toast('Duplicate file skipped: '+file.name);resolveImport('duplicate');cancelPending=null;return finished;}
     if(!/\.dem$/i.test(file.name)){
       step("Decoding exported replay","decodeReplay");
       const replay=await decodeReplay(buffer);if(token!==loadToken)return;
       step("Loading replay into viewer","loadReplay");
-      await loadReplay(replay);if(token!==loadToken)return;
-      saveDiagnostics(finishReport(report));loading(false);return;
+      if(replay?.type==='strat-scope-session'){const bundle=readBundle(replay),ids=new Map();for(const e of bundle.entries){if(token!==loadToken)return;const entry=await addReplay(e.replay,e);ids.set(e.id,entry.id);}if(token!==loadToken)return;clips.push(...bundle.clips.map(c=>({...c,entryId:ids.get(c.entryId)})));opponentOverrides=normalizeOverrides({core:[...opponentOverrides.core,...bundle.opponent.core],standIn:[...opponentOverrides.standIn,...bundle.opponent.standIn],excluded:[...opponentOverrides.excluded,...bundle.opponent.excluded.map(id=>ids.get(id))]});review?.refresh();toast('Session imported. Reattach voice recordings in Review → Matches.');}else await addReplay(replay);if(token!==loadToken)return;
+      fileHashes.add(hash);saveDiagnostics(finishReport(report));loading(false);resolveImport('done');cancelPending=null;return finished;
     }
     step("Starting parser worker","Worker");
     const worker=new Worker("./parser-worker.js");S.worker=worker;
@@ -126,10 +145,10 @@ async function openFile(file){
         worker.terminate();S.worker=null;
         report.status="running";delete report.finishedAt;delete report.durationMs;
         step("Loading replay into viewer","loadReplay");
-        try{await loadReplay(data.replay);if(token!==loadToken)return;saveDiagnostics(finishReport(report));loading(false);}
+        try{await addReplay(data.replay);if(token!==loadToken)return;fileHashes.add(hash);saveDiagnostics(finishReport(report));loading(false);resolveImport('done');cancelPending=null;}
         catch(error){if(token===loadToken)fail(error);}
       }else if(data.type==="error"){
-        if(report.error){worker.terminate();S.worker=null;loading(false);showDiagnostics();}
+        if(report.error){worker.terminate();S.worker=null;loading(false);showDiagnostics();resolveImport('failed');cancelPending=null;}
         else fail(new Error(data.message));
       }
     };
@@ -141,8 +160,9 @@ async function openFile(file){
     worker.onmessageerror=()=>{if(token===loadToken)fail(new Error("The parser response could not be transferred to the viewer."));};
     worker.postMessage({buffer,name:file.name,report},[buffer]);
   }catch(error){if(token===loadToken)fail(error);}
+  return finished;
 }
-async function loadSample(){stopLoad();const token=loadToken;setPlaying(false);loading(true,"Opening the public Mirage sample",25);try{const response=await fetch("./sample.strats");if(!response.ok)throw new Error("Sample download failed");const replay=await decodeReplay(await response.arrayBuffer());if(token!==loadToken)return;await loadReplay(replay,{sample:true});loading(false);}catch(e){if(token===loadToken){loading(false);toast(e.message);}}}
+async function loadSample(){if(queueRunning)return toast('Finish or cancel the import queue first.');stopLoad();const token=loadToken;setPlaying(false);loading(true,"Opening the public Mirage sample",25);try{const response=await fetch("./sample.strats");if(!response.ok)throw new Error("Sample download failed");const replay=await decodeReplay(await response.arrayBuffer());if(token!==loadToken)return;await addReplay(replay);S.sample=true;$('sample-badge').hidden=false;loading(false);}catch(e){if(token===loadToken){loading(false);toast(e.message);}}}
 function renderRoster(players){
   const r=round();if(!r)return;
   const stamp=JSON.stringify(players.map(p=>[p.id,p.hp,p.team,p.weapon,p.money,p.armor,p.inventory,p.alive]))+S.team+S.selected;
@@ -242,12 +262,12 @@ function draw(){
     if(S.names)lines.push(...wrapLabel(name(p.id),t=>ctx.measureText(t).width));
     const icons=getLoadoutIcons(p,{weapons:S.weaponIcons,armor:S.armorIcons,grenades:S.grenadeIcons});
     if(!lines.length&&!icons.length)continue;
-    const tw=Math.max(0,...lines.map(t=>ctx.measureText(t).width),Math.min(4,icons.length)*42)+12,th=lines.length*14+Math.ceil(icons.length/4)*40+8;
+    const iconLayout=layoutLoadoutIcons(icons),tw=Math.max(0,...lines.map(t=>ctx.measureText(t).width),iconLayout.width)+8,th=lines.length*14+iconLayout.height+6;
     const [tx,ty]=placeLabel(x,y,tw,th,width,height,tagBoxes);
     ctx.globalAlpha=alpha;ctx.strokeStyle=colors[p.team]+"88";ctx.lineWidth=.7;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(Math.max(tx,Math.min(tx+tw,x)),Math.max(ty,Math.min(ty+th,y)));ctx.stroke();
-    ctx.fillStyle="#101821e8";ctx.fillRect(tx,ty,tw,th);ctx.strokeRect(tx,ty,tw,th);
-    lines.forEach((text,i)=>{ctx.fillStyle=colors[p.team];ctx.fillText(text,tx+6,ty+4+i*14);});
-    icons.forEach((icon,i)=>drawLoadoutIcon(ctx,icon,tx+6+(i%4)*42,ty+4+lines.length*14+Math.floor(i/4)*40,28));ctx.globalAlpha=1;
+    ctx.fillStyle="#101821ad";ctx.fillRect(tx,ty,tw,th);
+    lines.forEach((text,i)=>{ctx.fillStyle=colors[p.team];ctx.fillText(text,tx+4,ty+3+i*14);});
+    iconLayout.items.forEach(({entry,x:ix,y:iy})=>drawLoadoutIcon(ctx,entry,tx+4+ix,ty+3+lines.length*14+iy,18));ctx.globalAlpha=1;
   }
   if(performance.now()-lastPanel>180){renderRoster(players);renderEventList();lastPanel=performance.now();}
 }
@@ -255,12 +275,13 @@ function animate(now){
   const dt=lastTime?Math.min((now-lastTime)/1000,.25):0;lastTime=now;
   if(S.playing&&round()){
     S.tick+=dt*rate()*S.speed;
-    if(S.tick>=round().end){const next=nextRoundIndex(S.replay,S.index,S.mode,S.loop);if(next===null){S.tick=round().end;setPlaying(false);if(S.mode==="pistols")toast("Pistol strats complete.",3000);}else setIndex(next,{keepMode:true,play:true});}
+    if(sequence){const ref=sequence.refs[sequence.index];if(S.tick>=(ref?.end??round().end)&&!sequenceBusy){S.tick=ref?.end??round().end;advanceSequence();}}
+    else if(S.tick>=round().end){const next=nextRoundIndex(S.replay,S.index,S.mode,S.loop);if(next===null){S.tick=round().end;setPlaying(false);if(S.mode==="pistols")toast("Pistol strats complete.",3000);}else setIndex(next,{keepMode:true,play:true});}
   }
-  updateTimeline();draw();renderId=requestAnimationFrame(animate);
+  syncVoice();updateTimeline();draw();renderId=requestAnimationFrame(animate);
 }
-$("demo-file").addEventListener("change",e=>{openFile(e.target.files[0]);e.target.value="";});
-$("sample-button").onclick=loadSample;$("cancel-load").onclick=stopLoad;
+$("demo-file").addEventListener("change",e=>{importFiles([...e.target.files]);e.target.value="";});
+$("sample-button").onclick=loadSample;$("cancel-load").onclick=()=>{queueCancelled=true;queue=[];stopLoad();};
 $("play").onclick=()=>{if(!S.replay)return;if(!S.playing&&S.tick>=round().end){if(S.mode==="pistols")setIndex(S.replay.pistols[0],{keepMode:true,play:false});else seek(startTick(round()));}setPlaying(!S.playing);};
 $("pistols").onclick=startPistols;
 $("prev-round").onclick=()=>setIndex(S.index-1);$("next-round").onclick=()=>setIndex(S.index+1);
@@ -289,13 +310,20 @@ document.querySelector(".utility-filters").onclick=e=>{const b=e.target.closest(
 $("add-note").onclick=()=>{const text=$("note-text").value.trim();if(!text||!round())return;S.notes.push({round:round().number,tick:Math.round(S.tick),text});$("note-text").value="";saveNotes();renderNotes();};
 $("notes-list").onclick=e=>{const del=e.target.closest("[data-delete-note]"),b=e.target.closest("[data-note]");if(del){S.notes.splice(Number(del.dataset.deleteNote),1);saveNotes();renderNotes();}else if(b){const n=S.notes[Number(b.dataset.note)];setIndex(S.replay.rounds.findIndex(r=>r.number===n.round),{play:false});seek(n.tick);}};
 $("export-button").onclick=async()=>{
-  if(!S.replay)return;try{const text=JSON.stringify({...S.replay,notes:S.notes,customMap:S.customMap});let blob=new Blob([text],{type:"application/json"});if(globalThis.CompressionStream)blob=await new Response(blob.stream().pipeThrough(new CompressionStream("gzip"))).blob();const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=S.replay.source.replace(/\.(dem|strats|json)$/i,"")+".strats";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);toast("Replay exported with your notes.",3000);}catch(e){toast("Export failed: "+e.message);}
+  if(!S.replay)return;flushEntry();try{const text=JSON.stringify({...S.replay,notes:S.notes,customMap:S.customMap});let blob=new Blob([text],{type:"application/json"});if(globalThis.CompressionStream)blob=await new Response(blob.stream().pipeThrough(new CompressionStream("gzip"))).blob();const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=S.replay.source.replace(/\.(dem|strats|json)$/i,"")+".strats";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);toast("Replay exported with your notes.",3000);}catch(e){toast("Export failed: "+e.message);}
 };
 $("diagnostics-button").onclick=()=>{setPlaying(false);showDiagnostics();};
 const openHelp=()=>{$("diagnostics-dialog").close();setPlaying(false);$("help-dialog").showModal();if(mapDef){$("map-x").value=mapDef.x;$("map-y").value=mapDef.y;$("map-scale").value=mapDef.scale;}};
 $("help-button").onclick=openHelp;$("about-button").onclick=openHelp;$("close-help").onclick=()=>$("help-dialog").close();
 $("apply-map").onclick=async()=>{const f=$("custom-radar").files[0],x=Number($("map-x").value),y=Number($("map-y").value),scale=Number($("map-scale").value);if(!f||![x,y,scale].every(Number.isFinite)||scale<=0){toast("Choose a radar image and valid overview coordinates.");return;}if(f.size>10*1024**2){toast("Choose a radar image smaller than 10 MB.");return;}const image=await new Promise((resolve,reject)=>{const fr=new FileReader();fr.onload=()=>resolve(fr.result);fr.onerror=reject;fr.readAsDataURL(f);});S.customMap={image,x,y,scale,name:S.replay?.map??"Custom radar",lower:null,splitZ:null};S.floor="upper";resetView();await chooseMap();$("help-dialog").close();toast("Custom radar applied. Export the replay to keep it.");};
-window.addEventListener("keydown",e=>{if(["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)||$("help-dialog").open||$("diagnostics-dialog").open)return;if(!S.replay)return;const k=e.key.toLowerCase();if([" ","arrowleft","arrowright","[","]","p","l","home"].includes(k))e.preventDefault();if(k===" ")$("play").click();else if(k==="arrowleft")seek(S.tick-5*rate());else if(k==="arrowright")seek(S.tick+5*rate());else if(k==="[")setIndex(S.index-1);else if(k==="]")setIndex(S.index+1);else if(k==="p")startPistols();else if(k==="l")$("loop").click();else if(k==="home")seek(startTick(round()));});
-let dragDepth=0;document.addEventListener("dragenter",e=>{if(e.dataTransfer.types.includes("Files")){e.preventDefault();dragDepth++;$("drop-overlay").hidden=false;}});document.addEventListener("dragover",e=>{if(e.dataTransfer.types.includes("Files"))e.preventDefault();});document.addEventListener("dragleave",e=>{dragDepth--;if(dragDepth<=0)$("drop-overlay").hidden=true;});document.addEventListener("drop",e=>{e.preventDefault();dragDepth=0;$("drop-overlay").hidden=true;const files=e.dataTransfer.files;if(files.length>1)toast("Opening the first file. Review one match at a time.");openFile(files[0]);});
+window.addEventListener("keydown",e=>{if(["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName)||$("help-dialog").open||document.querySelector("dialog[open]"))return;if(!S.replay)return;const k=e.key.toLowerCase();if([" ","arrowleft","arrowright","[","]","p","l","home"].includes(k))e.preventDefault();if(k===" ")$("play").click();else if(k==="arrowleft")seek(S.tick-5*rate());else if(k==="arrowright")seek(S.tick+5*rate());else if(k==="[")setIndex(S.index-1);else if(k==="]")setIndex(S.index+1);else if(k==="p")startPistols();else if(k==="l")$("loop").click();else if(k==="home")seek(startTick(round()));});
+let dragDepth=0;document.addEventListener("dragenter",e=>{if(e.dataTransfer.types.includes("Files")){e.preventDefault();dragDepth++;$("drop-overlay").hidden=false;}});document.addEventListener("dragover",e=>{if(e.dataTransfer.types.includes("Files"))e.preventDefault();});document.addEventListener("dragleave",e=>{dragDepth--;if(dragDepth<=0)$("drop-overlay").hidden=true;});document.addEventListener("drop",e=>{e.preventDefault();dragDepth=0;$("drop-overlay").hidden=true;importFiles([...e.dataTransfer.files]);});
 try{const response=await fetch("./maps/maps.json");if(!response.ok)throw new Error("Map definitions unavailable");mapDefs=await response.json();await chooseMap();}catch(e){toast(e.message);}
+document.querySelector('.view-tools').insertAdjacentHTML('afterbegin','<button id="prev-kill" class="icon-button" title="Previous kill (,)" aria-label="Previous kill">‹†</button><button id="next-kill" class="icon-button" title="Next kill (.)" aria-label="Next kill">†›</button><button id="copy-position" class="icon-button" title="Copy selected player position" aria-label="Copy player position">⌖</button><button id="clip-button" class="icon-button" title="Clips and bookmarks (C)" aria-label="Clips and bookmarks">✂</button>');
+function jumpKill(direction){if(!round())return;const kills=round().events.filter(e=>e.event_name==='player_death'&&(direction>0?e.tick>S.tick+.1:e.tick<S.tick-.1)).sort((a,b)=>direction*(a.tick-b.tick));if(kills[0]){seek(kills[0].tick);setPlaying(false);}else toast('No further kill in this round.',2500);}
+async function copyPosition(){const p=round()&&frameAt(round(),S.tick).find(p=>p.id===S.selected);if(!p)return toast('Select a player on the map or roster first.');const value=`setpos ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}; setang ${Number.isFinite(p.pitch)?p.pitch.toFixed(2):'0'} ${p.yaw.toFixed(2)} 0`;try{await navigator.clipboard.writeText(value);toast(Number.isFinite(p.pitch)?'Position and angles copied.':'Position and yaw copied. Pitch is unavailable; setang uses 0.');}catch{const field=document.createElement('textarea');field.value=value;field.readOnly=true;field.setAttribute('aria-label','Position command to copy');$('review-clips').append(field);review.show('clips');field.focus();field.select();toast('Select and copy the position command.');}}
+review=initSession({getEntries:()=>entries,getOpponent:()=>structuredClone(opponentOverrides),setOpponent:o=>{opponentOverrides=normalizeOverrides(o);},getClips:()=>clips,getMapDefs:()=>mapDefs,getCurrent:()=>({entryId:currentEntry?.id,roundIndex:S.index,tick:S.tick,replay:S.replay}),openRound,pause:()=>setPlaying(false),playSequence,toast,flush:flushEntry,download,attachVoice,detachVoice,hasVoice:id=>audioTracks.has(id),setVoice:(id,key,value)=>{const entry=entries.find(e=>e.id===id);if(entry?.voice)entry.voice[key]=value;syncVoice();},addClips:refs=>clips.push(...refs),removeEntry:id=>{const i=entries.findIndex(e=>e.id===id);if(i<0)return;detachVoice(id);entries.splice(i,1);for(let j=clips.length-1;j>=0;j--)if(clips[j].entryId===id)clips.splice(j,1);sequence=null;fileHashes.clear();if(currentEntry?.id===id){setPlaying(false);currentEntry=null;if(entries.length)activateEntry(entries[0]);else{S.replay=null;S.notes=[];$('empty').hidden=false;$('file-name').textContent='No demo loaded';$('rounds').innerHTML='';$('roster').innerHTML='';$('scouting').hidden=true;for(const key of ['play','back','forward','timeline','add-note','export-button','pistols','prev-round','next-round'])$(key).disabled=true;}}}});
+$('review-button').onclick=()=>review.show();$('opponent-button').onclick=()=>review.show('opponent');$('clip-button').onclick=()=>review.show('clips');$('copy-position').onclick=copyPosition;$('prev-kill').onclick=()=>jumpKill(-1);$('next-kill').onclick=()=>jumpKill(1);
+window.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||document.querySelector('dialog[open]')||!S.replay)return;if(e.key===','||e.key==='.'){e.preventDefault();jumpKill(e.key==='.'?1:-1);}if(e.key.toLowerCase()==='c'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();review.show('clips');}});
+window.addEventListener('beforeunload',()=>{for(const id of audioTracks.keys())detachVoice(id);});
 requestAnimationFrame(animate);

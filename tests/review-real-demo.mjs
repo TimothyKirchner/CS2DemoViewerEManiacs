@@ -1,0 +1,21 @@
+// Optional integration check: node tests/review-real-demo.mjs ../public-test.dem [--write out.scopereview]
+import fs from "node:fs";import vm from "node:vm";import zlib from "node:zlib";import assert from "node:assert/strict";
+import {parseDemo} from "../web/parse-demo.mjs";
+import {createReport} from "../web/diagnostics.mjs";
+import {parseReviewDetail} from "../web/review/parse-review.mjs";
+import {reviewReplay} from "../web/review/engine/review.mjs";
+const base=new URL("../web/vendor/",import.meta.url);vm.runInThisContext(fs.readFileSync(new URL("demoparser2.js",base),"utf8")+";globalThis.dp=wasm_bindgen;");await dp({module_or_path:fs.readFileSync(new URL("demoparser2_bg.wasm",base))});
+const bytes=new Uint8Array(fs.readFileSync(process.argv[2]));const started=Date.now();
+const replay=await parseDemo(bytes,"public-test.dem",dp,createReport({name:"public-test.dem",size:bytes.length}));
+const detail=parseReviewDetail(bytes,dp,replay);
+const review=reviewReplay(replay,{detail});
+assert.equal(detail.hurts.length,258,"player_hurt events");
+assert.ok(detail.coverage.pitch&&detail.coverage.spotted&&detail.coverage.velocity,"pitch, spotting and velocity parsed");
+assert.ok(detail.shots.every(s=>Number.isFinite(s.pitch)),"every shot has pitch");
+assert.equal(review.players.length,10);
+assert.ok(review.duels>50,"duels found");
+assert.ok(review.players.every(p=>Number.isFinite(p.ratings.scope)&&Number.isFinite(p.ratings.hltv2)&&p.stats.adr>0));
+assert.ok(review.players.filter(p=>p.mechanics.crosshair!==null).length>=8,"crosshair placement measured");
+assert.ok(review.clips.length>=10&&review.clips.some(c=>c.featured));
+const i=process.argv.indexOf("--write");if(i>0)fs.writeFileSync(process.argv[i+1],zlib.gzipSync(JSON.stringify({format:"strat-scope-review",version:1,replay,detail})));
+console.log(JSON.stringify({seconds:(Date.now()-started)/1000,coverage:review.coverage,duels:review.duels,findings:review.findings.length,clips:review.clips.length,players:review.players.map(p=>[p.name,p.ratings.scope,p.ratings.hltv2,p.ratings.impactPerRound,p.ratings.mechanics,p.ratings.decisions])},null,1));

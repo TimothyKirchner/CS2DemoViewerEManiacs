@@ -1,6 +1,7 @@
+import {weaponArt,weaponArtworkKey,equipmentArt} from "./loadout-art.mjs";
 const clean=value=>String(value??"").replace(/^weapon_/i,"").toLowerCase().replace(/[^a-z0-9]/g,"");
-const weapons={ak47:["AK-47","rifle",3],m4a1:["M4A1-S","rifle",3],m4a1s:["M4A1-S","rifle",3],m4a1silencer:["M4A1-S","rifle",3],m4a4:["M4A4","rifle",3],famas:["FAMAS","rifle",3],galilar:["Galil","rifle",3],aug:["AUG","rifle",3],sg553:["SG 553","rifle",3],awp:["AWP","sniper",3],ssg08:["SSG 08","sniper",3],scar20:["SCAR-20","sniper",3],g3sg1:["G3SG1","sniper",3],mac10:["MAC-10","smg",3],mp9:["MP9","smg",3],mp7:["MP7","smg",3],mp5sd:["MP5-SD","smg",3],ump45:["UMP-45","smg",3],p90:["P90","smg",3],bizon:["Bizon","smg",3],nova:["Nova","shotgun",3],xm1014:["XM1014","shotgun",3],mag7:["MAG-7","shotgun",3],sawedoff:["Sawed-Off","shotgun",3],m249:["M249","rifle",3],negev:["Negev","rifle",3],deagle:["Deagle","pistol",2],deserteagle:["Deagle","pistol",2],usps:["USP-S","pistol",2],uspsilencer:["USP-S","pistol",2],hkp2000:["P2000","pistol",2],p2000:["P2000","pistol",2],glock:["Glock","pistol",2],glock18:["Glock","pistol",2],elite:["Dualies","pistol",2],dualberettas:["Dualies","pistol",2],tec9:["Tec-9","pistol",2],fiveseven:["Five-SeveN","pistol",2],cz75a:["CZ75","pistol",2],cz75auto:["CZ75","pistol",2],revolver:["R8","pistol",2],r8revolver:["R8","pistol",2],p250:["P250","pistol",2]};
-const grenades={flashbang:["flash","Flash","#f6e7a6"],smokegrenade:["smoke","Smoke","#a9c4cf"],hegrenade:["he","HE","#d792a9"],highexplosivegrenade:["he","HE","#d792a9"],molotov:["fire","Molotov","#ff8151"],incgrenade:["fire","Incendiary","#ff8151"],incendiarygrenade:["fire","Incendiary","#ff8151"],decoy:["decoy","Decoy","#9fc9a5"],decoygrenade:["decoy","Decoy","#9fc9a5"]};
+const weapons={ak47:["AK-47","rifle",3],m4a1:["M4A4","rifle",3],m4a1s:["M4A1-S","rifle",3],m4a1silencer:["M4A1-S","rifle",3],m4a4:["M4A4","rifle",3],famas:["FAMAS","rifle",3],galilar:["Galil","rifle",3],aug:["AUG","rifle",3],sg553:["SG 553","rifle",3],sg556:["SG 553","rifle",3],awp:["AWP","sniper",3],ssg08:["SSG 08","sniper",3],scar20:["SCAR-20","sniper",3],g3sg1:["G3SG1","sniper",3],mac10:["MAC-10","smg",3],mp9:["MP9","smg",3],mp7:["MP7","smg",3],mp5sd:["MP5-SD","smg",3],ump45:["UMP-45","smg",3],p90:["P90","smg",3],bizon:["Bizon","smg",3],nova:["Nova","shotgun",3],xm1014:["XM1014","shotgun",3],mag7:["MAG-7","shotgun",3],sawedoff:["Sawed-Off","shotgun",3],m249:["M249","rifle",3],negev:["Negev","rifle",3],deagle:["Deagle","pistol",2],deserteagle:["Deagle","pistol",2],usps:["USP-S","pistol",2],uspsilencer:["USP-S","pistol",2],hkp2000:["P2000","pistol",2],p2000:["P2000","pistol",2],glock:["Glock","pistol",2],glock18:["Glock","pistol",2],elite:["Dualies","pistol",2],dualberettas:["Dualies","pistol",2],tec9:["Tec-9","pistol",2],fiveseven:["Five-SeveN","pistol",2],cz75a:["CZ75","pistol",2],cz75auto:["CZ75","pistol",2],revolver:["R8","pistol",2],r8revolver:["R8","pistol",2],p250:["P250","pistol",2]};
+const grenades={flashbang:["flash","Flash","#f6e7a6"],smokegrenade:["smoke","Smoke","#a9c4cf"],hegrenade:["he","HE","#d792a9"],highexplosivegrenade:["he","HE","#d792a9"],molotov:["fire","Molotov","#ff8151"],incgrenade:["incendiary","Incendiary","#ff8151"],incendiarygrenade:["incendiary","Incendiary","#ff8151"],decoy:["decoy","Decoy","#9fc9a5"],decoygrenade:["decoy","Decoy","#9fc9a5"]};
 const knife=key=>key==="knife"||key==="knifet"||key.includes("knife")||key.includes("bayonet")||key.includes("karambit")||key.includes("daggers");
 function itemName(item){return typeof item==="string"?item:item?.name??item?.weapon_name??item?.item_name??"";}
 function weaponDef(key){return weapons[key]??(knife(key)?["Knife","knife",1]:null);}
@@ -20,20 +21,37 @@ export function getLoadoutIcons(player={},options={}){
   }
   return entries;
 }
-function drawWeapon(ctx,type,s){ctx.beginPath();if(type==="pistol"){ctx.moveTo(s*.2,s*.25);ctx.lineTo(s*.72,s*.25);ctx.lineTo(s*.78,s*.4);ctx.lineTo(s*.53,s*.43);ctx.lineTo(s*.46,s*.78);ctx.lineTo(s*.3,s*.78);ctx.lineTo(s*.34,s*.42);ctx.lineTo(s*.2,s*.38);}else if(type==="knife"){ctx.moveTo(s*.12,s*.62);ctx.lineTo(s*.7,s*.2);ctx.lineTo(s*.93,s*.16);ctx.lineTo(s*.76,s*.4);ctx.lineTo(s*.24,s*.72);ctx.closePath();}else if(type==="sniper"){ctx.moveTo(s*.04,s*.45);ctx.lineTo(s*.95,s*.45);ctx.moveTo(s*.36,s*.45);ctx.lineTo(s*.26,s*.7);ctx.moveTo(s*.58,s*.45);ctx.lineTo(s*.66,s*.68);ctx.moveTo(s*.43,s*.32);ctx.lineTo(s*.67,s*.32);ctx.strokeRect(s*.45,s*.25,s*.2,s*.14);}else if(type==="smg"){ctx.moveTo(s*.1,s*.35);ctx.lineTo(s*.78,s*.35);ctx.lineTo(s*.93,s*.48);ctx.lineTo(s*.62,s*.5);ctx.lineTo(s*.55,s*.75);ctx.lineTo(s*.4,s*.75);ctx.lineTo(s*.42,s*.49);ctx.lineTo(s*.18,s*.55);}else if(type==="shotgun"){ctx.moveTo(s*.05,s*.39);ctx.lineTo(s*.93,s*.39);ctx.moveTo(s*.15,s*.48);ctx.lineTo(s*.72,s*.48);ctx.moveTo(s*.34,s*.48);ctx.lineTo(s*.25,s*.7);}else{ctx.moveTo(s*.04,s*.4);ctx.lineTo(s*.76,s*.4);ctx.lineTo(s*.96,s*.3);ctx.moveTo(s*.26,s*.4);ctx.lineTo(s*.16,s*.69);ctx.moveTo(s*.55,s*.4);ctx.lineTo(s*.64,s*.66);}type==="knife"?ctx.fill():ctx.stroke();}
-export function drawLoadoutIcon(ctx,entry,x,y,size=14){
-  ctx.save();ctx.translate(x,y);ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle=entry.color??"#d7e0e6";ctx.fillStyle=entry.color??"#d7e0e6";ctx.lineWidth=Math.max(1,size*.1);
+const artCache=new Map();
+function drawArt(ctx,art,x,y,width,height){
+  const [vx,vy,vw,vh]=art.viewBox,scale=Math.min(width/vw,height/vh);
+  ctx.save();ctx.translate(x+(width-vw*scale)/2,y+(height-vh*scale)/2);ctx.scale(scale,scale);ctx.translate(-vx,-vy);
+  for(const {d,rule} of art.paths){let path=artCache.get(d);if(!path){path=new Path2D(d);artCache.set(d,path);}ctx.fill(path,rule);}
+  ctx.restore();
+}
+// Compact cells follow the actual shape: rifles are wide, grenades narrow.
+export function layoutLoadoutIcons(entries,size=18,maxWidth=174){
+  let x=0,y=0,width=0;
+  const items=entries.map(entry=>{
+    const cellWidth=entry.kind==="weapon"?size*1.8:entry.kind==="armor"?size*1.8:size*((entry.count??1)>1?1.12:.85);
+    if(x&&x+cellWidth>maxWidth){x=0;y+=size+3;}
+    const item={entry,x,y};width=Math.max(width,x+cellWidth);x+=cellWidth+3;return item;
+  });
+  return {items,width,height:items.length?y+size:0};
+}
+export function drawLoadoutIcon(ctx,entry,x,y,size=18){
+  ctx.save();ctx.translate(x,y);ctx.fillStyle=entry.color??"#e1e9ee";
   if(entry.kind==="weapon"){
-    drawWeapon(ctx,weaponDef(entry.key)?.[1]??"rifle",size);const caption={"Five-SeveN":"5-7",Dualies:"DUAL",Deagle:"DEAGLE"}[entry.label]??entry.label;ctx.font=`600 ${Math.max(6,size*.36)}px Segoe UI, sans-serif`;ctx.textAlign="left";ctx.textBaseline="top";ctx.fillText(caption,0,size*.73,42);
+    drawArt(ctx,weaponArt[weaponArtworkKey(entry.key)],0,0,size*1.8,size);
   }else if(entry.kind==="armor"){
-    ctx.strokeStyle="#9fb3c2";ctx.strokeRect(1,1,size*.72,size*.78);if(Number.isFinite(entry.value)){ctx.fillStyle="#70b9e9";const h=size*.74*entry.value/100;ctx.fillRect(3,2+size*.74-h,size*.72-4,h);}ctx.fillStyle="#e3ebf0";ctx.font=`600 ${Math.max(6,size*.46)}px Segoe UI`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(Number.isFinite(entry.value)?String(entry.value):"?",size*.37,size*.4);if(entry.helmet){ctx.beginPath();ctx.arc(size*.83,size*.22,size*.15,Math.PI,0);ctx.lineTo(size*.98,size*.42);ctx.stroke();}
+    const vest=equipmentArt.armor;ctx.fillStyle="#52616c";drawArt(ctx,vest,0,0,size*.8,size);
+    if(Number.isFinite(entry.value)){
+      ctx.save();const h=size*Math.max(0,Math.min(100,entry.value))/100;ctx.beginPath();ctx.rect(0,size-h,size,h);ctx.clip();ctx.fillStyle="#dce5eb";drawArt(ctx,vest,0,0,size*.8,size);ctx.restore();
+    }
+    ctx.fillStyle="#dce5eb";ctx.font=`600 ${Math.max(8,size*.44)}px Segoe UI, sans-serif`;ctx.textAlign="left";ctx.textBaseline="bottom";ctx.fillText(Number.isFinite(entry.value)?String(entry.value):"?",size*.9,size);
+    if(entry.helmet)drawArt(ctx,equipmentArt.helmet,size*.9,0,size*.65,size*.5);
   }else{
-    if(entry.key==="flash"){ctx.fillRect(size*.36,1,size*.28,size*.2);ctx.beginPath();ctx.arc(size*.5,size*.58,size*.3,0,Math.PI*2);ctx.fill();}
-    else if(entry.key==="smoke"){ctx.fillRect(size*.25,size*.18,size*.5,size*.7);ctx.strokeRect(size*.34,1,size*.32,size*.2);}
-    else if(entry.key==="he"){ctx.beginPath();ctx.arc(size*.5,size*.56,size*.34,0,Math.PI*2);ctx.fill();ctx.strokeRect(size*.4,1,size*.2,size*.22);}
-    else if(entry.key==="fire"){ctx.beginPath();ctx.moveTo(size*.5,size*.05);ctx.bezierCurveTo(size*.9,size*.42,size*.75,size*.9,size*.5,size*.92);ctx.bezierCurveTo(size*.12,size*.76,size*.22,size*.35,size*.5,size*.05);ctx.fill();}
-    else{ctx.beginPath();ctx.arc(size*.5,size*.55,size*.3,0,Math.PI*2);ctx.stroke();}
-    if((entry.count??1)>1){ctx.fillStyle="#fff";ctx.font=`600 ${Math.max(7,size*.48)}px Segoe UI`;ctx.textAlign="right";ctx.textBaseline="bottom";ctx.fillText(`×${entry.count}`,size,size);}
+    drawArt(ctx,equipmentArt[entry.key]??equipmentArt.decoy,0,0,size*.85,size);
+    if((entry.count??1)>1){ctx.fillStyle="#fff";ctx.font=`700 ${Math.max(8,size*.44)}px Segoe UI, sans-serif`;ctx.textAlign="right";ctx.textBaseline="bottom";ctx.shadowColor="#101821";ctx.shadowBlur=2;ctx.fillText(`×${entry.count}`,size*1.12,size);}
   }
   ctx.restore();
 }

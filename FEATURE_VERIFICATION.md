@@ -1,5 +1,16 @@
 # Scouting feature verification
 
+## Version 1.2.0 local review expansion — 2026-10-26
+
+- 69 automated tests pass, covering existing replay behavior plus metric edge cases, scoped teams, filter combinations, bundle validation, temporal/floor queries, role evidence and veto validity.
+- `tests/session-smoke.cjs` passes in Electron: two replay imports, invalid-file continuation, renamed duplicate detection, combined side/result filtering, editable clip workflow, stats/scouting rendering, spatial evidence navigation, veto ban/undo, local WAV decoding and play/pause/seek sync, session export/reimport, cross-match clip autoplay with exact stopping, and narrow desktop layout. No renderer errors.
+- `tests/viewer-smoke.cjs --demo ../public-test.dem` passes: existing controls plus a fresh raw-demo worker import. The bundled sample is removed first because it is the same recording and would correctly be deduplicated.
+- Real WASM metric verification: nine eligible rounds, 258 hurt events, 6,822 capped enemy health damage, 62 enemy kills and 118 separately retained post-round events. Recorded pitch and utility damage were verified. The bundled sample includes the new event coverage.
+- Viewer/session screenshots were rendered and inspected. Tests use Electron offscreen rendering for reliable capture independent of desktop lock/display state.
+- Current ESEA, multi-map and genuine POV recording fidelity have not been exhaustively verified. POV/unverified coverage is disclosed and excludes outcome/damage rates requiring complete data. This is a local workflow expansion, not a claim of identical Skybox algorithms or online data coverage.
+
+The historical validation below describes version 1.1.1.
+
 Implemented release requirements:
 
 - Shooting: recorded weapon-fire events rendered briefly at the shooter; seeking behaves deterministically.

@@ -1,24 +1,34 @@
 # HANDOFF
-_Updated 2026-10-28 (migrated verbatim from ../HANDOFF_CURRENT.md of 2026-10-26)_
+_Updated 2026-11-03 (Claude, hub task 70ed7d0c, opponent analyser 5/5)_
 
 ## Current task
-No active work remains from the requested local feature expansion. Version 1.2.0 implemented and locally built; parent contains Strat-Scope-1.2.0-Windows-x64.exe and Strat-Scope-1.2.0-Source.zip. Executable copy SHA-256 verified; ZIP byte-verified.
+Opponent analyser on branch `feature/opponent-analyser` is complete (tasks 1-5). Nothing in progress.
+Branch is pushed; PR #2 to main is open (2026-11-04, no conflicts, no CI checks): https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2
 
-## Done
-- Compact 18px equipment icons using actual Valve CS vectors, preserving native proportions; no weapon captions/card borders. Source pinned and attributed in THIRD_PARTY_NOTICES.txt.
-- Simple multi-demo import session, sequential queue, cancellation, per-file failure continuation, content deduplication, match switch/removal. No database/cloud.
-- User-assigned team names/dates; combined map/team/player/side/buy/result/date filters.
-- Editable timed clips/bookmarks, tags/notes, ordered cross-match playback, session bundle import/export (.stratsession) for offline sharing.
-- Stats: K/D/A, ADR/KAST, opening duels/trades/clutches, flash and utility damage, map/weapon/economy splits, imported-player rankings. Added player_hurt and pitch parsing; explicit coverage prevents invented rates for legacy/partial data.
-- Cross-match occupancy heatmaps, drag/coordinate area queries, coarse recurring opening/path/utility candidates, evidence navigation, observed role hints, map results, manual veto scenarios, editable HTML/Markdown prep reports.
-- Per-match local voice attachment/offset/volume synchronized with replay transport; reattach audio after session import.
-- Position/angle copy and kill navigation shortcuts. Existing viewer/scouting features retained.
-- Validation: 69 unit tests pass. tests/session-smoke.cjs and tests/viewer-smoke.cjs --demo ../public-test.dem pass; real WASM metrics: 9 eligible rounds, 258 hurt events, 6822 capped enemy damage, 62 enemy kills, 118 separate post-round events. 55 packaged application files + docs verified; screenshots in verification/.
+## Done (task 5)
+- `web/opponent-report.mjs`: `opponentMapResults` (rounds, sides, match W/L per map), `vetoSuggestion` (ban their
+  strongest, pick their weakest; unseen pool maps listed as unknown; editable `DEFAULT_POOL`), `sideHabits`
+  (anchors, default setup, AWP spot, stacks, retakes, openings, opening spots >= 70 % / <= 30 %, low trades, utility
+  timings, T full-buy plant site, clutch player; each with sample, counter idea, evidence refs, heuristic flag,
+  "small sample" under 10 rounds), `economyNotes`, `standInNotes`, `antiStratReport`, `renderAntiStrat`
+  (Markdown, standalone HTML, or fragment with ▶ `data-play` buttons).
+- `prepReport` takes `sections` (pre-rendered parts); the scouting prep export appends the anti-strat page.
+- `sideSetups` player rows now carry `evidence` (rounds on their usual spot).
+- UI: "Anti-strat report" section in the Analyse opponent tab (title, map pool, Build report, Export Markdown/HTML).
+- `scripts/opponent-report.mjs <demo|folder> --md out --html out` (console prints counts only).
+- Tests: `tests/opponent-report.test.mjs` (5 tests); 129/129 unit tests; session smoke (report preview assert) and
+  viewer smoke pass; verification/*.png restored.
+- Docs: README feature bullet, LOCAL_REVIEW "Opponent analyser" section.
+- Real check (4 demos in Downloads/demos/28_10): 4/4 matched, 87 rounds, 31 habits, veto ban ancient / pick anubis.
+  Report and review in Git-ignored `review-out/opponent-report-test.md`.
 
 ## Next steps
-- Changes remain UNCOMMITTED. GitHub main last pushed at 2e045ff4ff3212de6d66805f59f23fc95a583e3d. Commit the 1.2.0 work when the user asks; do not describe new features as pushed.
-- Later: 3D automated demo review tool reusing the parser.
+- Frank: review `review-out/opponent-report-test.md` and the tab; then merge PR #2.
+- Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
 
 ## Open issues
-- Genuine POV/current ESEA/multi-map fidelity not exhaustively tested. Unknown visibility restricts outcome/damage stats. Roles/patterns are heuristics; veto is manual. Utility geometry remains approximate.
-- Public release publication was rejected by automatic approval review and remains UNAPPROVED. Do not publish/retry without explicit user approval. The old parent .github-release.cjs targets the old release and must not be run blindly.
+- Zones: 1400-unit site radius puts some mid callouts (anubis Middle, ancient Outside) into a site zone.
+- Wide utility time ranges (one cluster mixes early/late smokes) make the "fixed time" counter too strong.
+- Veto uses only opponent results; 1 anubis demo. Timeout caller not in parsed data.
+- Recorder blocked (CS2 exits while loading demos). Public release remains UNAPPROVED.
+- Never commit demos, review-out/ or SteamIDs/names (public repo).

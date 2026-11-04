@@ -1,0 +1,22 @@
+// Optional offline WASM integration: node tests/statistics-real-demo.mjs ../public-test.dem
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {parseDemo} from '../web/parse-demo.mjs';
+import {createReport} from '../web/diagnostics.mjs';
+import {computeStatistics} from '../web/statistics.mjs';
+const vendor=new URL('../web/vendor/',import.meta.url);
+vm.runInThisContext(fs.readFileSync(new URL('demoparser2.js',vendor),'utf8')+';globalThis.dp=wasm_bindgen;');
+await dp({module_or_path:fs.readFileSync(new URL('demoparser2_bg.wasm',vendor))});
+const bytes=new Uint8Array(fs.readFileSync(process.argv[2]));
+const replay=await parseDemo(bytes,'integration.dem',dp,createReport({name:'integration.dem',size:bytes.length}));
+const hurt=replay.rounds.flatMap(r=>r.events).filter(e=>e.event_name==='player_hurt');
+assert.ok(hurt.length>100,'real damage events parsed');
+assert.ok(hurt.every(e=>Number.isFinite(e.dmg_health)&&Number.isFinite(e.health)),'post-hit health and damage available');
+assert.ok(replay.rounds.some(r=>r.frames.some(f=>f.players.some(p=>Number.isFinite(p.pitch)))),'real pitch parsed');
+const stats=computeStatistics([{id:'real',replay}]);
+assert.equal(stats.coverage.damageRounds,9,'complete broadcast rounds have explicit damage coverage');
+assert.ok(stats.players.every(p=>Number.isFinite(p.adr)&&Number.isFinite(p.kast)&&p.kast>=0&&p.kast<=100));
+assert.ok(stats.players.some(p=>p.heDamage>0)&&stats.players.some(p=>p.fireDamage>0),'real HE and fire damage attributed');
+assert.ok(stats.players.reduce((n,p)=>n+p.damage,0)<=9*10*100,'health damage capped to starting health');
+console.log(JSON.stringify({rounds:stats.coverage,hurtEvents:hurt.length,totalDamage:stats.players.reduce((n,p)=>n+p.damage,0),kills:stats.players.reduce((n,p)=>n+p.kills,0),weapons:stats.weapons.length,postRoundEvents:replay.rounds.reduce((n,r)=>n+r.postRoundEvents.length,0)},null,2));

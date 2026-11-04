@@ -18,7 +18,7 @@ for(const file of [...files('web'),...files('desktop'),'assets/icon.png','packag
   }else assert.equal(hash(packaged),hash(source),`packaged bytes: ${file}`);
   manifest[file]=hash(source);
 }
-for(const file of ['README.txt','ANALYSIS.md','FEATURE_VERIFICATION.md','THIRD_PARTY_NOTICES.txt'])assert.equal(hash(fs.readFileSync(path.join(packed,file))),hash(fs.readFileSync(path.join(root,file))),file);
+for(const file of ['README.txt','ANALYSIS.md','FEATURE_VERIFICATION.md','LOCAL_REVIEW.md','THIRD_PARTY_NOTICES.txt'])assert.equal(hash(fs.readFileSync(path.join(packed,file))),hash(fs.readFileSync(path.join(root,file))),file);
 fs.mkdirSync(path.join(root,'verification'),{recursive:true});
 fs.writeFileSync(path.join(root,'verification/package-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
 console.log(`Verified ${Object.keys(manifest).length} packaged files and README/notices against source.`);

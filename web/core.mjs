@@ -1,6 +1,6 @@
 // Strat Scope: timeline normalization, independent of rendering and parser runtime.
-export const EVENT_NAMES = ["round_start", "round_freeze_end", "round_end", "round_officially_ended", "round_announce_match_start", "round_announce_last_round_half", "smokegrenade_detonate", "smokegrenade_expired", "inferno_startburn", "inferno_expire", "inferno_extinguish", "flashbang_detonate", "hegrenade_detonate", "decoy_started", "decoy_detonate", "weapon_fire", "player_death", "player_blind", "bomb_planted", "bomb_defused", "bomb_exploded", "bomb_begindefuse", "bomb_abortdefuse", "bomb_dropped", "bomb_pickup"];
-export const PLAYER_PROPS = ["X", "Y", "Z", "yaw", "health", "team_num", "weapon_name", "armor_value", "has_helmet", "has_defuser", "balance", "is_alive", "inventory", "flash_duration", "game_time"];
+export const EVENT_NAMES = ["round_start", "round_freeze_end", "round_end", "round_officially_ended", "round_announce_match_start", "round_announce_last_round_half", "smokegrenade_detonate", "smokegrenade_expired", "inferno_startburn", "inferno_expire", "inferno_extinguish", "flashbang_detonate", "hegrenade_detonate", "decoy_started", "decoy_detonate", "weapon_fire", "player_death", "player_hurt", "player_blind", "bomb_planted", "bomb_defused", "bomb_exploded", "bomb_begindefuse", "bomb_abortdefuse", "bomb_dropped", "bomb_pickup"];
+export const PLAYER_PROPS = ["X", "Y", "Z", "yaw", "pitch", "health", "team_num", "weapon_name", "armor_value", "has_helmet", "has_defuser", "balance", "is_alive", "inventory", "flash_duration", "game_time", "last_place_name"];
 export function plain(v) {
   if (v instanceof Map) return Object.fromEntries([...v].map(([k,x]) => [k,plain(x)]));
   if (Array.isArray(v)) return v.map(plain);
@@ -20,7 +20,10 @@ export function findRounds(events, rate=64) {
     const start = sorted.filter(e => e.event_name === "round_start" && e.is_warmup_period !== true && e.tick <= live.tick && e.tick > (freezes[i-1]?.tick ?? minTick-1)).at(-1);
     const number = Number.isInteger(live.total_rounds_played) ? live.total_rounds_played+1 : i+1;
     const lastTick = sorted.at(-1)?.tick ?? live.tick;
-    const r = {number, start:start?.tick ?? live.tick, live:live.tick, end:end?.tick ?? Math.min(lastTick,next-1), winner:end?.winner ?? null, reason:end?.message ?? "Incomplete round", incomplete:!end, frames:[], events:[], effects:[], grenades:[]};
+    const r = {number, start:start?.tick ?? live.tick, live:live.tick, end:end?.tick ?? Math.min(lastTick,next-1), winner:{T:2,CT:3}[end?.winner] ?? end?.winner ?? null, reason:end?.message ?? end?.reason ?? "Incomplete round", incomplete:!end, frames:[], events:[], effects:[], grenades:[]};
+    const official=sorted.find(e=>e.event_name==='round_officially_ended'&&e.tick>=r.end&&e.tick<next);
+    const nextStart=sorted.find(e=>e.event_name==='round_start'&&e.tick>r.end&&e.tick<=next);
+    r.eventEnd=Math.min(official?.tick??lastTick,(nextStart?.tick??next)-1);
     if(r.end <= r.live) continue;
     // A restart at the same score replaces the abandoned attempt.
     const previous = rounds.findIndex(x => x.number === number);
@@ -67,7 +70,7 @@ export function effectForPath(effects,path,rate=64) {
   if(path.type==="fire")return effects.filter(e=>e.type==="fire"&&String(e.thrower)===String(path.thrower)&&e.start>=first[0]&&Math.abs(e.start-(path.lastTick??last[0]))<=rate*.15&&Math.hypot(e.x-last[1],e.y-last[2],e.z-last[3])<96).sort((a,b)=>Math.abs(a.start-last[0])-Math.abs(b.start-last[0]))[0];
   return effects.find(e=>e.type===path.type&&String(e.id)===path.id&&e.start>=first[0]);
 }
-export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.dem") {
+export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.dem", coverage=null) {
   const events=plain(rawEvents).sort((a,b)=>a.tick-b.tick);
   const rows=plain(rawRows).sort((a,b)=>a.tick-b.tick);
   const grenades=plain(rawGrenades).sort((a,b)=>a.tick-b.tick);
@@ -76,7 +79,9 @@ export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.d
   const t1=t0 && rows.find(x=>x.tick>=t0.tick+64 && Number.isFinite(x.game_time) && x.game_time>t0.game_time);
   if(t0 && t1){const rate=(t1.tick-t0.tick)/(t1.game_time-t0.game_time);if(rate>=16&&rate<=256) tickRate=Math.round(rate);}
   const rounds=findRounds(events,tickRate), players=new Map(); let ri=0;
-  const frameMaps=rounds.map(()=>new Map());
+  const frameMaps=rounds.map(()=>new Map()),places=new Map();
+  // Callout names repeat on every sample; intern them so large demos keep one copy per name.
+  const place=name=>{if(typeof name!=="string"||!name)return undefined;let v=places.get(name);if(v===undefined){v=name;places.set(name,v);}return v;};
   for(const row of rows) {
     while(ri<rounds.length && row.tick>rounds[ri].end)ri++;
     if(ri>=rounds.length)break;
@@ -84,14 +89,16 @@ export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.d
     const id=String(row.steamid ?? row.name); if(id==="0"||id==="undefined")continue;
     players.set(id,{id,name:row.name||id});
     let frame=frameMaps[ri].get(row.tick);if(!frame){frame={tick:row.tick,players:[]};frameMaps[ri].set(row.tick,frame);}
-    frame.players.push({id,x:row.X,y:row.Y,z:row.Z??0,yaw:row.yaw??0,hp:row.health??0,team:row.team_num,alive:row.is_alive??row.health>0,weapon:row.weapon_name??"",armor:row.armor_value,hasHelmet:row.has_helmet,hasDefuser:row.has_defuser,money:row.balance,inventory:row.inventory,flash:row.flash_duration??0});
+    frame.players.push({id,x:row.X,y:row.Y,z:row.Z??0,yaw:row.yaw??0,pitch:row.pitch,hp:row.health??0,team:row.team_num,alive:row.is_alive??row.health>0,weapon:row.weapon_name??"",armor:row.armor_value,hasHelmet:row.has_helmet,hasDefuser:row.has_defuser,money:row.balance,inventory:row.inventory,flash:row.flash_duration??0,place:place(row.last_place_name)});
   }
   for(let i=0;i<rounds.length;i++) {
     const r=rounds[i];r.frames=[...frameMaps[i].values()];
     r.events=events.filter(e=>e.tick>=r.start&&e.tick<=r.end&&e.is_warmup_period!==true);
+    r.postRoundEvents=events.filter(e=>e.tick>r.end&&e.tick<=r.eventEnd&&e.is_warmup_period!==true);
     const effects=[];
     const starts={smokegrenade_detonate:["smoke","smokegrenade_expired",20],inferno_startburn:["fire","inferno_expire",7],flashbang_detonate:["flash",null,0.8],hegrenade_detonate:["he",null,0.8],decoy_started:["decoy","decoy_detonate",15]};
     for(const e of r.events) {
+      if(e.tick>r.end)continue;
       const spec=starts[e.event_name];if(!spec||!Number.isFinite(e.x)||!Number.isFinite(e.y))continue;
       const [type,expiry,seconds]=spec;
       const expire=expiry && events.find(x=>x.tick>e.tick&&x.tick<=r.end+tickRate*25&&(x.event_name===expiry||(type==="fire"&&x.event_name==="inferno_extinguish"))&&x.entityid===e.entityid);
@@ -122,10 +129,14 @@ export function assemble(header, rawEvents, rawRows, rawGrenades, source="demo.d
   const valid=rounds.filter(r=>r.frames.length>0);
   if(!valid.length)throw new Error("No playable rounds with player positions were found. Use a complete CS2 match / GOTV demo.");
   const replay={version:1,source,map:plain(header).map_name??"unknown",tickRate,players:[...players.values()],rounds:valid,warnings:[]};
+  const h=plain(header);
+  replay.metadata={header:h,recording: /sourcetv|gotv/i.test(String(h.client_name??''))?'broadcast':'unknown',eventCoverage:coverage?{...coverage}:null,postRoundEvents:true};
   replay.pistols=detectPistols(valid);
   if(valid[0].number!==1)replay.warnings.push("This recording does not contain round 1. Pistol strats is unavailable.");
   else if(replay.pistols.length<2)replay.warnings.push("A second pistol round was not found in this recording.");
   if(valid.some(r=>r.effects.some(e=>e.estimatedLifetime)))replay.warnings.push("Some utility expiry events are missing; those lifetimes use a fallback and are marked with ~.");
+  if(replay.metadata.recording!=='broadcast')replay.warnings.push('Recording visibility is unverified; POV or incomplete demos may omit opponents and events.');
+  if(valid.some(r=>r.incomplete))replay.warnings.push('Some rounds are incomplete; outcome-dependent statistics are unavailable for those rounds.');
   return replay;
 }
 export function frameAt(round,tick) {
