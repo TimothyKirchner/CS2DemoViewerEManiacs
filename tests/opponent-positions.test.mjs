@@ -88,8 +88,10 @@ test('heatmaps cover the team or one player per time window, with callouts',()=>
 
 test('hold-spot heatmap keeps only spots held in many rounds, not walk paths',()=>{
   const {entries,refs}=setup(),ct=refs.filter(r=>r.side===3);
-  // Synthetic frames are sparse (0.5 s per sample), so allow 1 s dwells.
-  const holds=positionHeatmap(entries,ct,{window:'0-20',minSeconds:1});
+  // Synthetic frames are sparse (0.5 s per sample), so allow 1 s dwells. Synthetic players start on their spots,
+  // which the default spawn filter drops, so it is off here and checked separately below.
+  assert.equal(positionHeatmap(entries,ct,{window:'0-20',minSeconds:1}).points.length,0,'standing where you spawned is not a hold');
+  const holds=positionHeatmap(entries,ct,{window:'0-20',minSeconds:1,skipSpawn:false});
   assert.equal(holds.mode,'holds');assert.ok(holds.points.length>0);
   // Synthetic CTs stand on A, mid and B; every kept point sits on one of those spots.
   for(const p of holds.points)assert.ok([2000,0,-2000].some(x=>Math.abs(p.x-x)<1),`unexpected spot at ${p.x}`);
