@@ -1,6 +1,6 @@
 import {detectOpponent,opponentRounds} from './opponent.mjs';
 import {buyLibrary,BUY_TYPES} from './opponent-buys.mjs';
-import {positionAnalysis,positionHeatmap,filterRounds,roundScores,WINDOWS,SCORE_STATES} from './opponent-positions.mjs';
+import {AWP_PLAYER,positionAnalysis,positionHeatmap,filterRounds,roundScores,WINDOWS,SCORE_STATES} from './opponent-positions.mjs';
 import {duelTendencies,stackTendencies,utilityClusters,playerTendencies,economyHabits,timeoutTendencies,tendencyAnalysis,UTILITY_TYPES} from './opponent-tendencies.mjs';
 import {escapeHtml as esc} from './scouting.mjs';
 import {antiStratReport,renderAntiStrat,DEFAULT_POOL} from './opponent-report.mjs';
@@ -52,15 +52,15 @@ export function initOpponent(container,api){
     if(!lib){for(const n of ['pos-controls','places','positions'])el(n).innerHTML='';drawHeat({points:[]},null);return;}
     const refs=opponentRounds(entries,d),maps=[...new Set(refs.map(r=>r.map))].sort();if(!maps.includes(pos.map))pos.map=maps[0]??'';
     if(!refs.some(r=>r.map===pos.map&&r.side===Number(pos.side)))pos.side=pos.side==='3'?'2':'3';
-    const core=d.players.filter(p=>p.core);if(pos.player&&!core.some(p=>p.id===pos.player))pos.player='';
+    const core=d.players.filter(p=>p.core);if(pos.player&&pos.player!==AWP_PLAYER&&!core.some(p=>p.id===pos.player))pos.player='';
     el('pos-controls').innerHTML=[select('map','Map',maps.map(m=>[m,m]),pos.map),select('side','Side',[['3','CT'],['2','T']],pos.side),
       select('buyType','Buy type',[['','All buys'],...BUY_TYPES.filter(([t])=>t!=='unknown')],pos.buyType),select('score','Score',[['','Any score'],...SCORE_STATES],pos.score),
-      select('window','Time',WINDOWS.map(w=>[w.id,w.label]),pos.window),select('mode','Show',[['holds','Hold spots (standing still)'],['all','All movement']],pos.mode),select('player','Players',[['','Whole team (all rounds)'],...core.map(p=>[p.id,`${p.name} (core)`])],pos.player)].join('');
+      select('window','Time',WINDOWS.map(w=>[w.id,w.label]),pos.window),select('mode','Show',[['holds','Hold spots (standing still)'],['all','All movement']],pos.mode),select('player','Players',[['','Whole team (all rounds)'],[AWP_PLAYER,'AWP (whoever has it)'],...core.map(p=>[p.id,`${p.name} (core)`])],pos.player)].join('');
     const mapDefs=api.getMapDefs?.()??{},filters={map:pos.map,side:pos.side,buyType:pos.buyType,score:pos.score};
     const kept=filterRounds(refs,filters,{buyRounds:lib.rounds,scores:roundScores(entries,d)}),heat=positionHeatmap(entries,kept,{window:pos.window,player:pos.player,mode:pos.mode});
     const PALETTE=['#ff9f2c','#3fb6ff','#7ee06a','#ff5fa2','#c38bff'],colourOf=id=>{const i=core.findIndex(p=>p.id===id);return i>=0?PALETTE[i%PALETTE.length]:'#a8b0bd';},nameOf=id=>core.find(p=>p.id===id)?.name??'stand-in';
     drawHeat(heat,mapDefs[pos.map],colourOf);
-    el('places').innerHTML=`<p>${esc(heat.window.label)}, ${pos.player?esc(core.find(p=>p.id===pos.player)?.name??''):'whole team'}: ${esc(heat.sample)} of ${refs.filter(r=>r.map===pos.map&&r.side===Number(pos.side)).length}; ${heat.mode==='holds'?`${heat.points.length} repeated hold spots (standing still 2 s+).`:`${heat.playerSeconds.toFixed(0)} player seconds.`}</p>${heat.mode==='holds'
+    el('places').innerHTML=`<p>${esc(heat.window.label)}, ${pos.player===AWP_PLAYER?'AWP (whoever has it), rounds with an AWP':pos.player?esc(core.find(p=>p.id===pos.player)?.name??''):'whole team'}: ${esc(heat.sample)} of ${refs.filter(r=>r.map===pos.map&&r.side===Number(pos.side)).length}; ${heat.mode==='holds'?`${heat.points.length} repeated hold spots (standing still 2 s+).`:`${heat.playerSeconds.toFixed(0)} player seconds.`}</p>${heat.mode==='holds'
       ?table(['#','Callout','Team rounds','Main player','Others'],heat.points.slice(0,15).map(p=>[String(p.rank),esc(p.place),`${Math.round(p.share*100)}% (${p.rounds})`,
         `<span style="color:${colourOf(p.main?.id)}">●</span> ${esc(nameOf(p.main?.id))} ${Math.round((p.main?.share??0)*100)}% of his rounds`,esc(p.holders.slice(1).map(h=>`${nameOf(h.id)} ${h.rounds}`).join(', '))]))
       :table(['Callout','Share of time'],heat.places.slice(0,10).map(x=>[esc(x.place),`${Math.round(x.share*100)}%`]))}`;

@@ -15,7 +15,10 @@ https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2. Nothing in prog
   others; "Show" select keeps "All movement" (no 15 % opacity floor now).
 - Real check (Downloads/demos/28_10): CT 0-20 s ancient 17 spots (A 78 %, B 52 %), anubis 18 (Middle 73 %);
   later windows 23-42 spots (noisier: retakes, rotations).
-- Tests 130/130; session smoke passes (select count 6 -> 7 fixed; it broke in 24db5fc).
+- "Where is the AWP": Players filter "AWP (whoever has it)" (`AWP_PLAYER`) runs the same hold spots on whoever
+  on the target side holds or carries an AWP; share = % of AWP rounds, holders = who AWPs there. Real check:
+  ancient CT 0-20 s AWP on A 57 % (one player 80 %), anubis Middle 75 %.
+- Tests 131/131; session smoke passes (select count 6 -> 7 fixed; it broke in 24db5fc).
 
 ## Done earlier (task 5)
 - Anti-strat report, veto suggestion, side habits, economy/stand-in notes, report script; see git log.

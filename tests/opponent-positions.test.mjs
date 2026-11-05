@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {zoneOf,setupLabel,roundScores,filterRounds,positionHeatmap,sideSetups,positionAnalysis,WINDOWS} from '../web/opponent-positions.mjs';
+import {AWP_PLAYER,zoneOf,setupLabel,roundScores,filterRounds,positionHeatmap,sideSetups,positionAnalysis,WINDOWS} from '../web/opponent-positions.mjs';
 import {detectOpponent,opponentRounds} from '../web/opponent.mjs';
 import {buyLibrary} from '../web/opponent-buys.mjs';
 import {makeEntry} from '../web/session.mjs';
@@ -102,4 +102,12 @@ test('hold-spot heatmap keeps only spots held in many rounds, not walk paths',()
   assert.ok(!holds.points.some(p=>Math.abs(p.x-600)<1));
   const all=positionHeatmap(entries,ct,{window:'0-20',mode:'all'});
   assert.equal(all.mode,'all');assert.ok(all.points.length>=holds.points.length);
+});
+
+test('AWP radar follows whoever carries the AWP',()=>{
+  const {entries,refs}=setup(),ct=refs.filter(r=>r.side===3);
+  // Only o4 (demo a, round 1) and the stand-in s1 (demo c) carry an AWP, both on B.
+  const awp=positionHeatmap(entries,ct,{window:'0-20',player:AWP_PLAYER,minSeconds:1,skipSpawn:false});
+  assert.equal(awp.rounds,2);assert.equal(awp.points.length,1);assert.equal(awp.points[0].place,'BombsiteB');
+  assert.deepEqual(awp.points[0].holders.map(h=>h.id).sort(),['o4','s1']);assert.equal(awp.points[0].share,1);
 });

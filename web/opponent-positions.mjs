@@ -52,11 +52,14 @@ export const setupLabel=zones=>`A ${zones.A??0} / mid ${zones.mid??0} / B ${zone
 function frameAt(round,tick,rate){let best=null;for(const f of round.frames){if(f.tick>tick)break;best=f;}return best&&tick-best.tick<=rate*.5?best:null;}
 const ctx=(entries)=>{const byId=new Map(entries.map(e=>[e.id,e]));return ref=>{const entry=byId.get(ref.entryId),round=entry?.replay.rounds[ref.roundIndex];return round?{entry,round,rate:entry.replay.tickRate||64}:null;};};
 
-// Rows in the shape aggregateHeatmap expects; `player` narrows the samples to one SteamID.
+// Rows in the shape aggregateHeatmap expects; `player` narrows the samples to one SteamID, or with
+// AWP_PLAYER to whoever on the target side holds or carries an AWP in that sample ("where is the AWP").
+export const AWP_PLAYER='awp';
 function heatRows(entries,refs,player){
   const get=ctx(entries),rows=[];
   for(const ref of refs){const c=get(ref);if(!c)continue;
-    const round=player?{...c.round,frames:c.round.frames.map(f=>({tick:f.tick,players:f.players.filter(p=>String(p.id)===player)}))}:c.round;
+    const keep=player===AWP_PLAYER?p=>p.team===ref.side&&isAwp(p):p=>String(p.id)===player;
+    const round=player?{...c.round,frames:c.round.frames.map(f=>({tick:f.tick,players:f.players.filter(keep)}))}:c.round;
     rows.push({round,roundIndex:ref.roundIndex,entry:c.entry,side:ref.side,map:ref.map,rate:c.rate});}
   return rows;
 }
