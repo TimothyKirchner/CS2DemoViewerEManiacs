@@ -1,5 +1,5 @@
 # HANDOFF
-_Updated 2026-11-05 (Claude, opponent heatmap hold spots)_
+_Updated 2026-11-05 (Claude, opponent heatmap hold spots, local build 1.3.0)_
 
 ## Current task
 Opponent analyser on branch `feature/opponent-analyser`; PR #2 to main open:
@@ -18,14 +18,16 @@ https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2. Nothing in prog
 - "Where is the AWP": Players filter "AWP (whoever has it)" (`AWP_PLAYER`) runs the same hold spots on whoever
   on the target side holds or carries an AWP; share = % of AWP rounds, holders = who AWPs there. Real check:
   ancient CT 0-20 s AWP on A 57 % (one player 80 %), anubis Middle 75 %.
+- Version 1.3.0 (package.json, lock, README.txt). Local portable build: release/ and parent folder
+  `Strat-Scope-1.3.0-Windows-x64.exe`; verify-package passed (80 files), manifest regenerated. Not published.
+  Build needs node on PATH (npm.cmd calls node): prepend the Codex node bin dir before build-local.cjs.
 - Tests 131/131; session smoke passes (select count 6 -> 7 fixed; it broke in 24db5fc).
 
 ## Done earlier (task 5)
 - Anti-strat report, veto suggestion, side habits, economy/stand-in notes, report script; see git log.
 
 ## Next steps
-- Frank: look at the hold-spot radar in the app (not checked visually yet), then merge PR #2.
-- Regenerate verification/package-manifest.json (new web/opponent*.mjs files) before the next package check.
+- Frank: try the 1.3.0 exe (hold-spot radar, AWP filter), then merge PR #2. GitHub release needs his approval.
 
 ## Open issues
 - Hold thresholds (240 box, 1 s peek, 2 s, 220 units, 10 % / 25 %) are heuristics; tune after Frank's visual review.
