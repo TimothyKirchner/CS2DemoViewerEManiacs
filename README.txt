@@ -1,7 +1,7 @@
-STRAT SCOPE 1.2.0 — WINDOWS x64
+STRAT SCOPE 1.3.0 — WINDOWS x64
 
 GET STARTED
-1. Double-click Strat-Scope-1.2.0-Windows-x64.exe.
+1. Double-click Strat-Scope-1.3.0-Windows-x64.exe.
 2. Click Import demos (or use Ctrl+O) and select one or several extracted
    CS2 .dem files, .strats replays or a .stratsession review bundle.
 3. Choose a round or click Pistol strats, then use the playback controls.
@@ -117,6 +117,12 @@ DEPENDENCIES AND CREDITS
 Electron 45.0.0, electron-builder 26.15.3. Exact dependencies are locked in
 package-lock.json. Runtime license notices ship inside the portable package.
 See THIRD_PARTY_NOTICES.txt for parser and map sources.
+
+VERSION 1.3.0
+Adds the opponent analyser: buys, positions and setups, anti-strat report and
+veto suggestion. The positions radar shows hold spots (where players stand,
+jiggles included, per player and as a share of rounds) and where the AWP plays.
+All spots and habits are heuristics from sampled positions.
 
 VERSION 1.2.0
 Adds the local multi-demo review and scouting workflow described above.
