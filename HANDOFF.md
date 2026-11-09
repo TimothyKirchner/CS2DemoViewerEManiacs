@@ -36,3 +36,9 @@ https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2. Nothing in prog
 - Recorder blocked (CS2 exits while loading demos). Public release remains UNAPPROVED.
 - Node is not on PATH: use C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe
 - Never commit demos, review-out/ or SteamIDs/names (public repo).
+
+## Auto notes (claude session 9ba40a86, 2026-11-09T07:21)
+<!-- auto: written by local LLM from transcript tail; verify before trusting -->
+- '- `C:\\Users\\timot\\Desktop\\CS2DemoviewerEManiacs\\Strat-Scope-1.3.0-Windows-x64.exe` built'
+- '- Last commit: `790a4bc`'
+- '- Merge blocked by "Merge Without Review"'
