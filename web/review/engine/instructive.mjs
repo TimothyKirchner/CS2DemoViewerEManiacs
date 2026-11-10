@@ -87,6 +87,8 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
   const deathContext = d => {
     const f = frameBefore(round.frames, d.tick), meP = f?.players.find(p => p.id === me), facts = [], causes = [];
     if (meP?.place) facts.push(`you at ${meP.place}`);
+    const kP = d.attacker_steamid ? f?.players.find(p => p.id === String(d.attacker_steamid)) : null;
+    const kDist = kP && meP ? Math.hypot(kP.x - meP.x, kP.y - meP.y) : null;
     if (d.weapon) facts.push(`(${key(d.weapon)}${d.headshot ? ", headshot" : ""})`);
     const blind = round.events.find(e => e.event_name === "player_blind" && String(e.user_steamid) === me && teamOf(e.attacker_steamid) !== team && e.tick <= d.tick && e.tick >= d.tick - 3 * rate && Number(e.blind_duration ?? 1) > 0.7);
     if (blind) causes.push("flashed");
@@ -97,7 +99,8 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     if (nades >= 2) causes.push("utility");
     if (near !== null && near <= o.closeUnits) causes.push("close");
     const parts = facts.length ? [facts.join(" ")] : [];
-    parts.push(blind ? "flashed" : "not flashed");
+    if (kP) parts.push(`killer ${kP.place ? `at ${kP.place}, ` : ""}${Math.round(kDist)} units (${Math.round(kDist * 0.0254)} m) away`);
+    parts.push(blind ? `flashed (${Number(blind.blind_duration ?? 0).toFixed(1)} s, ${((d.tick - blind.tick) / rate).toFixed(1)} s before)` : "no enemy flash on you in the last 3 s");
     if (near !== null) parts.push(`nearest teammate ${Math.round(near)} units away`);
     parts.push(nades ? `unused: ${types.join(", ") || `${nades} grenade${nades > 1 ? "s" : ""}`}` : "no grenades left");
     const look = causes[0] === "flashed" ? "You were flashed before the duel: watch the flash come, and whether you could turn away or fall back behind cover."
@@ -107,7 +110,7 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
       : null;
     return {text: parts.length ? `: ${parts.join(", ")}` : "", look};
   };
-  const addDeath = (type, score, d, head, tail) => { const c = deathContext(d); add(type, score, [deathMoment(d)], `${head}${c.text}${tail}`); if (c.look) out.at(-1).look = c.look; };
+  const addDeath = (type, score, d, head, tail) => { const c = deathContext(d); add(type, score, [deathMoment(d)], `${head}${c.text}${tail}`); if (c.look) out.at(-1).look = c.look; out.at(-1).killer = nm(d.attacker_steamid); };
 
   // Opening duel.
   const first = deaths.find(d => d.attacker_steamid && teamOf(d.attacker_steamid) !== teamOf(d.user_steamid));
@@ -152,6 +155,8 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     const lostWhy = died ? `${why} You died after the plant to ${died.attacker_steamid ? nm(died.attacker_steamid) : "?"} with ${at(died.tick)} left${deathContext(died).text}.`
       : `${why} You were alive when it was defused: check whether you could hear or contest the defuse.`;
     if (team === 2) add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, won ? why : lostWhy);
+    if (team === 2 && !won && died) { const mates = (frameBefore(round.frames, died.tick)?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false), meP = frameBefore(round.frames, died.tick)?.players.find(p => p.id === me);
+      if (meP && mates.some(p => Math.hypot(p.x - meP.x, p.y - meP.y) <= o.closeUnits)) out.at(-1).look = "You and a teammate held the bomb from the same spot: one grenade or one swing can take both, so split into a crossfire with separate angles."; }
     else add(won ? "retake-won" : "retake-lost", won ? 3 + 0.5 * kills.length : 2, moments, why);
   }
 
@@ -188,9 +193,14 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
 export function instructiveRounds(replay, review, opts = {}) {
   const o = {...INSTRUCTIVE_DEFAULTS, ...opts}, me = String(o.player), rate = replay.tickRate;
   if (!replay.players.some(p => p.id === me)) throw new Error(`Player ${me} is not in this demo`);
-  const findings = (review?.findings ?? []).filter(f => f.player === me), candidates = [];
+  const findings = (review?.findings ?? []).filter(f => f.player === me), candidates = [], pattern = {rounds: 0, deaths: 0, untraded: 0, openingDeaths: 0, byKiller: {}};
   replay.rounds.forEach((round, index) => {
     const cats = roundCategories(replay, index, me, o, findings).sort((a, b) => b.score - a.score);
+    pattern.rounds++;
+    const dead = cats.find(c => DEATHS.has(c.type));
+    if (dead) { pattern.deaths++; pattern.byKiller[dead.killer] = (pattern.byKiller[dead.killer] ?? 0) + 1; }
+    if (cats.some(c => c.type === "untraded-death")) pattern.untraded++;
+    if (cats.some(c => c.type === "opening-death" || c.type === "opening-death-lost")) pattern.openingDeaths++;
     if (!cats.length) return;
     const total = cats[0].score + 0.4 * cats.slice(1).reduce((s, c) => s + c.score, 0);
     if (total < o.minScore) return;
@@ -202,10 +212,10 @@ export function instructiveRounds(replay, review, opts = {}) {
     // From just before the first moment of the primary category to just after its last one.
     const wp = review?.rounds?.[index]?.winProbability ?? [], lastTick = primary.moments.at(-1).tick, sign = self?.team === 2 ? 1 : -1, mine = x => r2(sign > 0 ? x.t : 1 - x.t);
     const pre = wp.filter(x => x.tick < keyTick).at(-1), post = wp.filter(x => x.tick <= lastTick).at(-1);
-    const swing = pre && post && post.tick >= keyTick ? {before: mine(pre), after: mine(post)} : null;
+    const swing = pre && post && post.tick >= keyTick && !(primary.kind === "highlight" && mine(post) >= 0.99) ? {before: mine(pre), after: mine(post)} : null;
     candidates.push({
       round: index, roundNumber: round.number, score: r1(total), kind: bad >= 2 && good >= 2 ? "mixed" : bad >= good ? "mistake" : "highlight",
-      category: primary.type, title: primary.title, confidence: primary.confidence, why: primary.why, lookAt: primary.look,
+      category: primary.type, title: primary.title, confidence: primary.confidence, why: [primary.why, ...cats.slice(1).filter(c => c.type in ENGINE || c.type === "wasted-utility").slice(0, 2).map(c => `Also: ${c.why}`)].join(" "), lookAt: primary.look,
       side: self?.team === 2 ? "T" : "CT", buy: self ? teamBuy(replay, index, self.team) : null, won: winnerTeam(round.winner) !== null ? winnerTeam(round.winner) === self?.team : null,
       startTick: round.live, endTick: round.end, keyTick, keySeconds: r2(keyTick / rate), keyClock: mmss(keyTick / rate), roundClock: clock(round, keyTick, rate),
       winChance: swing, categories: cats.map(c => ({type: c.type, kind: c.kind, score: r1(c.score), confidence: c.confidence, why: c.why})),
@@ -216,7 +226,7 @@ export function instructiveRounds(replay, review, opts = {}) {
     format: "strat-scope-instructive-rounds", version: INSTRUCTIVE_VERSION, map: replay.map, tickRate: rate, rounds: replay.rounds.length,
     player: {steamId: me, name: playerName(replay, me), accountId: accountId(me)},
     settings: {max: o.max, leadSeconds: o.leadSeconds, deathLeadSeconds: o.deathLeadSeconds, tailSeconds: o.tailSeconds, tradeSeconds: o.tradeSeconds, maxDeaths: o.maxDeaths},
-    candidates: candidates.length, picks: choose(candidates, o).map((p, i) => ({rank: i + 1, ...p}))
+    candidates: candidates.length, patterns: pattern, picks: choose(candidates, o).map((p, i) => ({rank: i + 1, ...p}))
   };
 }
 
@@ -265,6 +275,7 @@ export function instructiveMarkdown(result, {demo = "", plan = ""} = {}) {
     `Demo: ${demo || "?"} · ${result.rounds} rounds · ${result.tickRate} ticks/s · ${result.picks.length} picks from ${result.candidates} candidate rounds.`,
     `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant the bomb timer, marked (bomb)). Spectate: ${result.player.name}.`,
     "Confidence: high = from game events, medium = from sampled positions/inventories, low = judgement call.", "",
+    ...(result.patterns ? [`Patterns over ${result.patterns.rounds} rounds: ${result.patterns.deaths} rounds where you died first or untraded (${result.patterns.untraded} not traded within ${result.settings.tradeSeconds}s, ${result.patterns.openingDeaths} first deaths of the round). Killers in those rounds: ${Object.entries(result.patterns.byKiller).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}.`, ""] : []),
     "| # | Round | Type | Category | Conf. | Demo time | Clip window | Why / what to look at |", "|---|---|---|---|---|---|---|---|"
   ];
   for (const p of result.picks) {

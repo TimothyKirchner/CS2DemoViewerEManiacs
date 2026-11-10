@@ -147,7 +147,7 @@ test('scoreboard counts exit frags but not deaths after the final round', async 
 test('death picks carry the cause: callout, weapon, distance to the team and a cause-specific look-at',()=>{
   const near=instructiveRounds(match([SPECS[0]]),null,{player:'1'}).picks[0];
   assert.match(near.why,/^Died first with \d:\d\d left to P6.*nearest teammate 100 units away, no grenades left; the team lost the round\.$/);
-  assert.match(near.why,/not flashed/);assert.match(near.lookAt,/teammate was close/);
+  assert.match(near.why,/no enemy flash on you/);assert.match(near.lookAt,/teammate was close/);
   const far=match([{...SPECS[0],place:(id)=>id===1?{x:3000,place:'Canal',inventory:['AK-47','Flashbang','Smoke Grenade']}:{}}]);
   const pick=instructiveRounds(far,null,{player:'1'}).picks[0];
   assert.match(pick.why,/you at Canal/);assert.match(pick.why,/unused: flashbang, smoke/);
@@ -167,4 +167,12 @@ test('picks carry the win-chance swing of the key moment for the focus team',()=
   const replay=match(SPECS),review=reviewReplay(replay,{detail:null});
   const p=instructiveRounds(replay,review,{player:'1'}).picks.find(x=>x.roundNumber===1);
   assert.ok(p.winChance&&p.winChance.after<p.winChance.before,'dying first lowers the T win chance');
+});
+
+test('death text names the killer position and the report lists cross-round patterns',()=>{
+  const replay=match(SPECS),res=instructiveRounds(replay,reviewReplay(replay,{detail:null}),{player:'1'});
+  const p=res.picks.find(x=>x.roundNumber===1);
+  assert.match(p.why,/killer \d+ units \(\d+ m\) away/);assert.match(p.why,/no enemy flash on you in the last 3 s/);
+  assert.equal(res.patterns.rounds,5);assert.ok(res.patterns.untraded>=2);assert.equal(res.patterns.byKiller.P6,1);
+  assert.match(instructiveMarkdown(res),/Patterns over 5 rounds/);
 });
