@@ -53,12 +53,14 @@ export function vetoSuggestion(results,{pool=DEFAULT_POOL,minRounds=HABIT_LIMITS
 }
 
 const habit=(kind,text,count,total,counter,evidence,extra={})=>({kind,text,count,total,share:total?count/total:0,sample:of(count,total),
-  small:total<SMALL,counter:total<MIN_COUNTER?'':total<SMALL?`Check the evidence rounds first. ${counter}`:counter,evidence:refs(evidence),heuristic:true,...extra});
+  small:total<SMALL,counter:total<MIN_COUNTER||!counter?'':total<SMALL&&evidence?.length?`Check the evidence rounds first. ${counter}`:counter,evidence:refs(evidence),heuristic:true,...extra});
 
 // Top reads of one map: the strongest non-small habits on both sides, weighted by share and sample size.
 export function topReads(sides,n=3){
   const all=sides.flatMap(s=>s.habits.filter(h=>!h.small&&!['starts','plants'].includes(h.kind)).map(h=>({...h,side:s.side})));
-  return all.sort((a,b)=>b.share*Math.sqrt(b.total)-a.share*Math.sqrt(a.total)).slice(0,n).map(({side,...h})=>({...h,side,ref:sides.find(s=>s.side===side).habits.find(x=>x.text===h.text)}));
+  // Strength = distance from a coin flip, weighted by sample, so low-share habits (rare trades) rank too.
+  const strength=h=>Math.abs(h.share-.5)*Math.sqrt(h.total);
+  return all.sort((a,b)=>strength(b)-strength(a)).slice(0,n).map(({side,...h})=>({...h,side,ref:sides.find(s=>s.side===side).habits.find(x=>x.text===h.text)}));
 }
 
 // Exploitable habits of one map side. `pos` = sideSetups(), `tend` = one side of tendencyAnalysis(), `buys` =
@@ -70,7 +72,7 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
     out.push(habit('position',`${p.place} (${p.zone}) ${side===3?'anchored':'taken'} by ${p.name}`,p.count,p.rounds,
       side===3?`Expect ${p.name} on ${p.place}; pre-plan flashes or a utility clear for that spot.`:`Expect ${p.name} on ${p.place} at 20 s; hold an angle on it early.`,p.evidence,{player:p.name}));
   const setup=pos?.setups?.[0];
-  const at=side===3?'15 s':'20 s',aliveNote=g=>{const n=Object.values(g?.zones??{}).reduce((a,b)=>a+b,0);return n&&n<5?`, ${n} alive (one died before ${at})`:'';};
+  const at=side===3?'15 s':'20 s',aliveNote=g=>{const n=Object.values(g?.zones??{}).reduce((a,b)=>a+b,0);return n&&n<5?`, ${n} alive (${5-n} died before ${at} or missing)`:'';};
   if(setup&&pos.rounds>=L.minRounds&&setup.share>=L.setupShare)out.push(habit('setup',`Default ${side===3?'CT setup':'T spread'} (living players at ${at}): ${setup.label}${aliveNote(setup)}`,setup.count,pos.rounds,
     side===3?`Hit the site with the fewest players in this setup (${setup.label}).`:'Their spread at 20 s is predictable; plan a mid-round rotate against it.',setup.evidence));
   // T side without a dominant spread still gets its most common one, so the IGL sees the structure.
@@ -169,7 +171,7 @@ const evidenceText=e=>`R${e.number} · ${e.source}${Number.isFinite(e.tick)?` (t
 export function renderAntiStrat(report,format='markdown',{play=false,fragment=play}={}){
   const md=format==='markdown',h=s=>md?String(s??''):esc(s);
   const ev=list=>list.length?(md?` Evidence: ${list.map(evidenceText).join('; ')}.`:` <span class="report-evidence">${list.map(e=>play?`<button class="scout-evidence" data-play="${esc(e.entryId)}" data-round="${e.roundIndex}" data-tick="${Number.isFinite(e.tick)?e.tick:''}">▶ ${esc(evidenceText(e))}</button>`:esc(evidenceText(e))).join(' · ')}</span>`):'';
-  const item=x=>{const head=x.countsOnly?`${h(x.text)}.`:`${h(x.text)}: ${h(pct(x.share))} (${h(of(x.count,x.total,x.unit??'rounds'))})${x.small?' — small sample':''}.`,counter=x.counter?`${md?'*':'<em>'}Counter (heuristic):${md?'*':'</em>'} ${h(x.counter)}`:'Too few rounds for a counter.';
+  const item=x=>{const head=x.countsOnly?`${h(x.text)}.`:`${h(x.text)}: ${h(pct(x.share))} (${h(of(x.count,x.total,x.unit??'rounds'))})${x.small?' — small sample':''}.`,counter=x.counter?`${md?'*':'<em>'}Counter (heuristic):${md?'*':'</em>'} ${h(x.counter)}`:x.total<MIN_COUNTER?'Too few rounds for a counter.':'';
     return md?`- ${head} ${counter}${ev(x.evidence)}`:`<li>${head} ${counter}${ev(x.evidence)}</li>`;};
   const list=items=>items.length?(md?items.map(item).join('\n'):`<ul>${items.map(item).join('')}</ul>`):(md?'- No habit above the thresholds.':'<p class="muted">No habit above the thresholds.</p>');
   const plain=lines=>md?lines.map(l=>`- ${l}`).join('\n'):`<ul>${lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`;

@@ -105,7 +105,7 @@ test('utility timing is "fixed" only for tight windows, unknown callouts are dro
 
 test('top reads skip small samples; veto flags maps with one demo',()=>{
   const sides=[{side:3,habits:[{text:'a',share:.9,total:5,small:true},{text:'b',share:.7,total:20,small:false}]},{side:2,habits:[{text:'c',share:.6,total:30,small:false}]}];
-  assert.deepEqual(topReads(sides).map(x=>x.text),['c','b']);
+  assert.deepEqual(topReads(sides).map(x=>x.text),['b','c'],'distance from 50 % weighted by sample');
   const r=(map,wins,decided,demos)=>({map,wins,decided,demos,winRate:wins/decided,sample:`${wins} of ${decided}`,matchWins:1,matchLosses:0,matchDraws:0});
   const v=vetoSuggestion([r('de_ancient',30,50,3),r('de_anubis',10,25,1)]);
   assert.ok(v.notes.some(n=>n.includes('Weak data')&&n.includes('de_anubis')));
