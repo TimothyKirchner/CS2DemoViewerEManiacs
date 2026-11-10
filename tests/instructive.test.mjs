@@ -143,3 +143,21 @@ test('scoreboard counts exit frags but not deaths after the final round', async 
   const s = boxScore(replay, null);
   assert.deepEqual([s.get('1').kills, s.get('2').deaths, s.get('1').deaths], [1, 1, 0]);
 });
+
+test('death picks carry the cause: callout, weapon, distance to the team and a cause-specific look-at',()=>{
+  const near=instructiveRounds(match([SPECS[0]]),null,{player:'1'}).picks[0];
+  assert.match(near.why,/^Died first with \d:\d\d left to P6.*nearest teammate 100 units away; the team lost the round\.$/);
+  const far=match([{...SPECS[0],place:(id)=>id===1?{x:3000,place:'Canal',inventory:['AK-47','Flashbang','Smoke Grenade']}:{}}]);
+  const pick=instructiveRounds(far,null,{player:'1'}).picks[0];
+  assert.match(pick.why,/at Canal/);assert.match(pick.why,/2 grenades unused/);
+  assert.match(pick.lookAt,/far from your team/);
+  const w=pick.windows[0];assert.ok(w.seconds>=12,'deaths get a longer lead');
+});
+
+test('ranking keeps at most maxDeaths death picks when other candidates exist',()=>{
+  const c=(n,category,score)=>({roundNumber:n,category,score,kind:category.includes('death')?'mistake':'highlight'});
+  const list=[...[1,2,3,4,5,6].map(n=>c(n,'untraded-death',5)),c(7,'multikill',1),c(8,'team-flash',1)];
+  const picks=choose(list,{max:6,minEach:1,maxDeaths:4});
+  assert.equal(picks.filter(p=>p.category==='untraded-death').length,4);
+  assert.ok(picks.some(p=>p.category==='multikill')&&picks.some(p=>p.category==='team-flash'));
+});

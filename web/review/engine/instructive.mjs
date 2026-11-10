@@ -1,12 +1,14 @@
 // Finds one focus player's most instructive rounds (mistakes and good examples) and turns their key
 // moments into clip windows. The plan output is a normal recording plan (clip-plan.mjs), so
 // recorder/record-clips.mjs --plan can record it once demo playback works again.
-import {frameBefore, equipmentValue, primaryValue, clock, winnerTeam} from "./util.mjs";
+import {frameBefore, equipmentValue, primaryValue, clock, winnerTeam, grenadeCount, key} from "./util.mjs";
 import {TIPS} from "./clips.mjs";
 import {buildRecordingPlan, accountId} from "./clip-plan.mjs";
 
 export const INSTRUCTIVE_VERSION = 1;
-export const INSTRUCTIVE_DEFAULTS = {max: 8, minEach: 2, minScore: 1.5, leadSeconds: 6, tailSeconds: 3, tradeSeconds: 5};
+export const INSTRUCTIVE_DEFAULTS = {max: 8, minEach: 2, minScore: 1.5, leadSeconds: 6, deathLeadSeconds: 12, tailSeconds: 3, tradeSeconds: 5, maxDeaths: 4, aloneUnits: 1000};
+// Picks whose primary category is one of your deaths; at most maxDeaths of them, so highlights and other mistakes show too.
+const DEATHS = new Set(["opening-death-lost", "opening-death", "untraded-death"]);
 
 // confidence: high = derived from game events (kills, plant, round result); medium = depends on sampled
 // positions/inventories or the engine's trade/spot logic; low = a judgement call (economy, saving, isolation).
@@ -47,6 +49,15 @@ const MULTI = {2: 1.5, 3: 3, 4: 4, 5: 5};
 
 export const mmss = seconds => { const s = Math.max(0, Math.floor(seconds)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const r1 = x => Math.round(x * 10) / 10, r2 = x => Math.round(x * 100) / 100;
+// Team buy of one side, from equipment 20 s into the round (thresholds as in the opponent analyser).
+export function teamBuy(replay, index, team) {
+  const round = replay.rounds[index];
+  if (index === 0 || index === 12) return "pistol";  // MR12: first round of each half
+  const f = frameBefore(round.frames, round.live + 20 * replay.tickRate), mates = (f?.players ?? []).filter(p => p.team === team);
+  if (!mates.length) return null;
+  const v = mates.reduce((s, p) => s + equipmentValue(p), 0);
+  return v < 5000 ? "eco" : v < 20000 ? "force/half" : "full";
+}
 export function playerName(replay, id) { return replay.players.find(p => p.id === String(id))?.name ?? String(id); }
 
 // Accepts a SteamID64 or a (partial, case-insensitive) player name.
@@ -68,17 +79,40 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
   const myKills = deaths.filter(d => isEnemyKill(d, me)), myDeath = deaths.find(d => String(d.user_steamid) === me);
   const killer = myDeath?.attacker_steamid && String(myDeath.attacker_steamid) !== me && teamOf(myDeath.attacker_steamid) !== team ? String(myDeath.attacker_steamid) : null;
   const killMoments = ks => ks.map(k => ({tick: k.tick, label: `Kill on ${nm(k.user_steamid)}`}));
-  const deathMoment = d => ({tick: d.tick, label: d.attacker_steamid ? `Died to ${nm(d.attacker_steamid)}` : "Died"});
+  const deathMoment = d => ({tick: d.tick, label: d.attacker_steamid ? `Died to ${nm(d.attacker_steamid)}` : "Died", lead: o.deathLeadSeconds});
+  // What the demo says about a death: callout, killer weapon, flashed, distance to the nearest teammate and
+  // grenades still in hand. The cause picks the look-at text instead of one template for every death.
+  const deathContext = d => {
+    const f = frameBefore(round.frames, d.tick), meP = f?.players.find(p => p.id === me), facts = [], causes = [];
+    if (meP?.place) facts.push(`at ${meP.place}`);
+    if (d.weapon) facts.push(`(${key(d.weapon)}${d.headshot ? ", headshot" : ""})`);
+    const blind = round.events.find(e => e.event_name === "player_blind" && String(e.user_steamid) === me && teamOf(e.attacker_steamid) !== team && e.tick <= d.tick && e.tick >= d.tick - 3 * rate && Number(e.blind_duration ?? 1) > 0.7);
+    if (blind) causes.push("flashed");
+    const mates = (f?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false && meP);
+    const near = mates.length ? Math.min(...mates.map(p => Math.hypot(p.x - meP.x, p.y - meP.y))) : null;
+    if (near !== null && near > o.aloneUnits) causes.push("alone");
+    const nades = meP ? grenadeCount(meP) : 0; if (nades >= 2) causes.push("utility");
+    const parts = [...facts];
+    if (blind) parts.push("while flashed");
+    if (near !== null) parts.push(`nearest teammate ${Math.round(near)} units away`);
+    if (nades) parts.push(`${nades} grenade${nades > 1 ? "s" : ""} unused`);
+    const look = causes[0] === "flashed" ? "You were flashed before the duel: watch the flash come, and whether you could turn away or fall back behind cover."
+      : causes[0] === "alone" ? "You took the duel far from your team: was there a teammate close enough to trade, or should you have fallen back or waited?"
+      : causes[0] === "utility" ? "You died with utility in hand: which grenade could have taken this fight for you (flash before the peek, smoke the angle)?"
+      : null;
+    return {text: parts.length ? ` ${parts.join(", ")}` : "", look};
+  };
+  const addDeath = (type, score, d, head, tail) => { const c = deathContext(d); add(type, score, [deathMoment(d)], `${head}${c.text}${tail}`); if (c.look) out.at(-1).look = c.look; };
 
   // Opening duel.
   const first = deaths.find(d => d.attacker_steamid && teamOf(d.attacker_steamid) !== teamOf(d.user_steamid));
-  if (first && myDeath === first && killer) add(decided && !won ? "opening-death-lost" : "opening-death", decided && !won ? 4 : 2, [deathMoment(first)], `Died first at ${at(first.tick)} to ${nm(killer)}${decided ? won ? "; the team still won." : "; the team lost the round." : "."}`);
-  if (first && isEnemyKill(first, me)) add("opening-kill", won ? 3 : 2, killMoments([first]), `Opening kill on ${nm(first.user_steamid)} at ${at(first.tick)}${decided ? won ? "; the round was won." : ", but the round was lost." : "."}`);
+  if (first && myDeath === first && killer) addDeath(decided && !won ? "opening-death-lost" : "opening-death", decided && !won ? 4 : 2, first, `Died first with ${at(first.tick)} left to ${nm(killer)}`, decided ? won ? "; the team still won." : "; the team lost the round." : ".");
+  if (first && isEnemyKill(first, me)) add("opening-kill", won ? 3 : 2, killMoments([first]), `Opening kill on ${nm(first.user_steamid)} with ${at(first.tick)} left${decided ? won ? "; the round was won." : ", but the round was lost." : "."}`);
 
   // Death without a trade: the killer survives the next tradeSeconds against your team.
   if (myDeath && killer) {
     const traded = deaths.some(x => String(x.user_steamid) === killer && x.tick > myDeath.tick && x.tick <= myDeath.tick + o.tradeSeconds * rate && teamOf(x.attacker_steamid) === team);
-    if (!traded) add("untraded-death", decided && !won ? 3 : 2.5, [deathMoment(myDeath)], `Killed by ${nm(killer)} at ${at(myDeath.tick)} and not traded within ${o.tradeSeconds}s.`);
+    if (!traded) addDeath("untraded-death", decided && !won ? 3 : 2.5, myDeath, `Killed by ${nm(killer)} with ${at(myDeath.tick)} left`, `; not traded within ${o.tradeSeconds}s.`);
   }
 
   if (myKills.length >= 2) {
@@ -97,7 +131,7 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
   if (clutch && decided) {
     const kills = myKills.filter(k => k.tick > clutch.tick), died = myDeath && myDeath.tick > clutch.tick ? myDeath : null;
     const moments = [{tick: clutch.tick, label: `1v${clutch.n} starts`}, ...killMoments(kills), ...(died ? [deathMoment(died)] : [])];
-    const why = `1v${clutch.n} from ${at(clutch.tick)}${kills.length ? ` with ${kills.length} kill${kills.length > 1 ? "s" : ""}` : ""}; ${won ? "won" : "lost"}.`;
+    const why = `1v${clutch.n} from ${at(clutch.tick)} left${kills.length ? ` with ${kills.length} kill${kills.length > 1 ? "s" : ""}` : ""}; ${won ? "won" : "lost"}.`;
     if (won) add("clutch-won", 2 + 1.5 * clutch.n, moments, why);
     else add("clutch-lost", clutch.n === 1 ? 3 : clutch.n === 2 ? 2.5 : 1.5, moments, why);
   }
@@ -108,7 +142,7 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     const outcome = round.events.find(e => (e.event_name === "bomb_defused" || e.event_name === "bomb_exploded") && e.tick > plant.tick);
     const kills = myKills.filter(k => k.tick > plant.tick), died = myDeath && myDeath.tick > plant.tick ? myDeath : null;
     const moments = [{tick: plant.tick, label: "Bomb planted"}, ...killMoments(kills), ...(died ? [deathMoment(died)] : []), ...(outcome ? [{tick: outcome.tick, label: outcome.event_name === "bomb_defused" ? "Bomb defused" : "Bomb exploded"}] : [])];
-    const why = `Alive at the plant (${at(plant.tick)})${kills.length ? `, ${kills.length} kill${kills.length > 1 ? "s" : ""} after it` : ""}; ${outcome ? outcome.event_name === "bomb_defused" ? "bomb defused" : "bomb exploded" : won ? "round won" : "round lost"}.`;
+    const why = `Alive at the plant (${at(plant.tick)} left)${kills.length ? `, ${kills.length} kill${kills.length > 1 ? "s" : ""} after it` : ""}; ${outcome ? outcome.event_name === "bomb_defused" ? "bomb defused" : "bomb exploded" : won ? "round won" : "round lost"}.`;
     if (team === 2) add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, why);
     else add(won ? "retake-won" : "retake-lost", won ? 3 + 0.5 * kills.length : 2, moments, why);
   }
@@ -159,7 +193,7 @@ export function instructiveRounds(replay, review, opts = {}) {
     candidates.push({
       round: index, roundNumber: round.number, score: r1(total), kind: bad >= 2 && good >= 2 ? "mixed" : bad >= good ? "mistake" : "highlight",
       category: primary.type, title: primary.title, confidence: primary.confidence, why: primary.why, lookAt: primary.look,
-      side: self?.team === 2 ? "T" : "CT", won: winnerTeam(round.winner) !== null ? winnerTeam(round.winner) === self?.team : null,
+      side: self?.team === 2 ? "T" : "CT", buy: self ? teamBuy(replay, index, self.team) : null, won: winnerTeam(round.winner) !== null ? winnerTeam(round.winner) === self?.team : null,
       startTick: round.live, endTick: round.end, keyTick, keySeconds: r2(keyTick / rate), keyClock: mmss(keyTick / rate), roundClock: clock(round, keyTick, rate),
       categories: cats.map(c => ({type: c.type, kind: c.kind, score: r1(c.score), confidence: c.confidence, why: c.why})),
       windows, spectate: {steamId: me, name: playerName(replay, me), accountId: accountId(me)}
@@ -168,14 +202,16 @@ export function instructiveRounds(replay, review, opts = {}) {
   return {
     format: "strat-scope-instructive-rounds", version: INSTRUCTIVE_VERSION, map: replay.map, tickRate: rate, rounds: replay.rounds.length,
     player: {steamId: me, name: playerName(replay, me), accountId: accountId(me)},
-    settings: {max: o.max, leadSeconds: o.leadSeconds, tailSeconds: o.tailSeconds, tradeSeconds: o.tradeSeconds},
+    settings: {max: o.max, leadSeconds: o.leadSeconds, deathLeadSeconds: o.deathLeadSeconds, tailSeconds: o.tailSeconds, tradeSeconds: o.tradeSeconds, maxDeaths: o.maxDeaths},
     candidates: candidates.length, picks: choose(candidates, o).map((p, i) => ({rank: i + 1, ...p}))
   };
 }
 
 // Best rounds by score, keeping at least minEach mistakes and minEach good examples when available.
-export function choose(candidates, {max = INSTRUCTIVE_DEFAULTS.max, minEach = INSTRUCTIVE_DEFAULTS.minEach} = {}) {
-  const ranked = [...candidates].sort((a, b) => b.score - a.score || a.roundNumber - b.roundNumber), picked = new Set();
+export function choose(candidates, {max = INSTRUCTIVE_DEFAULTS.max, minEach = INSTRUCTIVE_DEFAULTS.minEach, maxDeaths = INSTRUCTIVE_DEFAULTS.maxDeaths} = {}) {
+  const sorted = [...candidates].sort((a, b) => b.score - a.score || a.roundNumber - b.roundNumber), picked = new Set();
+  const others = sorted.filter(c => !DEATHS.has(c.category)).length, allowed = Math.max(maxDeaths, max - others);
+  let deaths = 0; const ranked = sorted.filter(c => !DEATHS.has(c.category) || ++deaths <= allowed);
   for (const kind of ["mistake", "highlight"]) ranked.filter(c => c.kind === kind || c.kind === "mixed").filter(c => !picked.has(c)).slice(0, Math.min(minEach, Math.floor(max / 2))).forEach(c => picked.add(c));
   for (const c of ranked) { if (picked.size >= max) break; picked.add(c); }
   return ranked.filter(c => picked.has(c));
@@ -187,7 +223,7 @@ export function clipWindows(moments, round, rate, {leadSeconds = INSTRUCTIVE_DEF
   const byTick = new Map();
   for (const m of [...moments].sort((a, b) => a.tick - b.tick)) byTick.set(m.tick, [...(byTick.get(m.tick) ?? []), m]);
   for (const [tick, ms] of byTick) {
-    const start = Math.max(lo, Math.round(tick - leadSeconds * rate)), end = Math.min(hi, Math.round(tick + tailSeconds * rate)), last = out.at(-1);
+    const lead = Math.max(leadSeconds, ...ms.map(m => m.lead ?? 0)), start = Math.max(lo, Math.round(tick - lead * rate)), end = Math.min(hi, Math.round(tick + tailSeconds * rate)), last = out.at(-1);
     if (last && start <= last.endTick) { last.endTick = Math.max(last.endTick, end); last.moments.push(...ms); }
     else out.push({startTick: start, endTick: end, moments: [...ms]});
   }
@@ -214,13 +250,13 @@ export function instructiveMarkdown(result, {demo = "", plan = ""} = {}) {
   const lines = [
     `# Instructive rounds: ${result.player.name} on ${result.map}`, "",
     `Demo: ${demo || "?"} · ${result.rounds} rounds · ${result.tickRate} ticks/s · ${result.picks.length} picks from ${result.candidates} candidate rounds.`,
-    `Clip window: ${result.settings.leadSeconds} s before and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Spectate: ${result.player.name}.`,
+    `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant this is not the bomb timer). Spectate: ${result.player.name}.`,
     "Confidence: high = from game events, medium = from sampled positions/inventories, low = judgement call.", "",
     "| # | Round | Type | Category | Conf. | Demo time | Clip window | Why / what to look at |", "|---|---|---|---|---|---|---|---|"
   ];
   for (const p of result.picks) {
     const clips = p.windows.map(w => `${w.startClock}-${w.endClock} (${w.startTick}-${w.endTick})`).join("<br>");
-    lines.push(`| ${p.rank} | ${p.roundNumber} (${p.side}, ${p.won === null ? "?" : p.won ? "won" : "lost"}) | ${p.kind} | ${cell(p.title)} | ${p.confidence} | ${p.keyClock} (${p.keySeconds}s, tick ${p.keyTick}) | ${clips} | ${cell(p.why)} Look at: ${cell(p.lookAt)} |`);
+    lines.push(`| ${p.rank} | ${p.roundNumber} (${p.side}, ${p.won === null ? "?" : p.won ? "won" : "lost"}${p.buy ? `, ${p.buy}` : ""}) | ${p.kind} | ${cell(p.title)} | ${p.confidence} | ${p.keyClock} (${p.keySeconds}s, tick ${p.keyTick}) | ${clips} | ${cell(p.why)} Look at: ${cell(p.lookAt)} |`);
   }
   for (const p of result.picks) {
     const extra = p.categories.slice(1).map(c => `${c.type} (${c.confidence})`).join(", ");
