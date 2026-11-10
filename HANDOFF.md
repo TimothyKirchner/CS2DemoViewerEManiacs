@@ -15,8 +15,8 @@ PR to main still to open: https://github.com/TimothyKirchner/CS2DemoViewerEMania
   15-point edge; trades compared with their opponents' rate (10 points); no counter text below 8 rounds;
   wording follows the numbers; per-map top reads; T starts per player; plant split with even-split
   handling; side-aware utility counters; "Site left empty at the plant"; veto flags single-demo maps.
-- Review engine (Frank's anubis demo 357f8183): r1 5.8, r2 7.0, r3 7.8, r4 8.0 satisfied, r5 confirmation
-  after a fix (see verdict file). Fixed: death causes (you/killer callout, distance in units and metres,
+- Review engine (Frank's anubis demo 357f8183): r1 5.8, r2 7.0, r3 7.8, r4 8.0 satisfied, r5 8.3
+  satisfied after the retake-label fix. Fixed: death causes (you/killer callout, distance in units and metres,
   flash evidence, teammate distance, unused grenade types, cause-specific look-at), 12 s death lead, max 4
   death picks and max half highlights, buy type, bomb timer after the plant, win-chance swing (model
   estimate), rating and benchmark definitions, cross-round patterns, post-plant causes.
