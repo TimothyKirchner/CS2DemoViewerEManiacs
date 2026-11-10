@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {opponentMapResults,vetoSuggestion,sideHabits,standInNotes,economyNotes,antiStratReport,renderAntiStrat} from '../web/opponent-report.mjs';
+import {opponentMapResults,vetoSuggestion,sideHabits,standInNotes,economyNotes,antiStratReport,renderAntiStrat,topReads} from '../web/opponent-report.mjs';
 import {detectOpponent,opponentRounds} from '../web/opponent.mjs';
 import {prepReport} from '../web/scouting.mjs';
 import {makeEntry} from '../web/session.mjs';
@@ -86,4 +86,26 @@ test('markdown and HTML exports; prepReport embeds the page as a section',()=>{
   const prepHtml=prepReport({title:'Prep',sections:[{markdown:md,html:renderAntiStrat(report,'html',{fragment:true})}]},'html');
   assert.ok(prepHtml.includes('<div class="anti-strat"><h1>Beat &lt;them&gt;</h1>'));assert.equal((prepHtml.match(/<!doctype/g)??[]).length,1);
   assert.equal(prepReport({title:'Prep'}).includes('how to beat them'),false);
+});
+
+test('utility timing is "fixed" only for tight windows, unknown callouts are dropped, duels need an edge',()=>{
+  const cl=(place,early,late,rounds)=>({clusters:[{place,x:1,y:2,share:.8,rounds,medianSeconds:early+1,earlySeconds:early,lateSeconds:late,evidence:[]}]});
+  const tend=(smoke,fire,flash,wins=6,count=12)=>({rounds:12,utility:{types:{smoke,fire,flash}},duels:{openings:{wins,count,winRate:wins/count}}});
+  const h=sideHabits(3,{tend:tend(cl('Middle',7,21,10),cl('Ramp',7,8,10),cl('unknown',5,6,10))});
+  const u=h.filter(x=>x.kind==='utility');
+  assert.equal(u.length,2,'cluster without a callout is dropped');
+  assert.ok(u.find(x=>x.text.includes('Middle')).text.includes('timing varies'));
+  assert.ok(!u.find(x=>x.text.includes('Middle')).counter.includes('fixed time'));
+  assert.ok(u.find(x=>x.text.includes('Ramp')).counter.includes('fixed time'));
+  assert.ok(!h.some(x=>x.kind==='openings'),'50 % openings are no habit');
+  assert.ok(sideHabits(3,{tend:tend(null,null,null,9,12)}).some(x=>x.kind==='openings'),'75 % openings are a habit');
+  assert.ok(!JSON.stringify(h).includes('x 1'),'no raw coordinates');
+});
+
+test('top reads skip small samples; veto flags maps with one demo',()=>{
+  const sides=[{side:3,habits:[{text:'a',share:.9,total:5,small:true},{text:'b',share:.7,total:20,small:false}]},{side:2,habits:[{text:'c',share:.6,total:30,small:false}]}];
+  assert.deepEqual(topReads(sides).map(x=>x.text),['c','b']);
+  const r=(map,wins,decided,demos)=>({map,wins,decided,demos,winRate:wins/decided,sample:`${wins} of ${decided}`,matchWins:1,matchLosses:0,matchDraws:0});
+  const v=vetoSuggestion([r('de_ancient',30,50,3),r('de_anubis',10,25,1)]);
+  assert.ok(v.notes.some(n=>n.includes('Weak data')&&n.includes('de_anubis')));
 });

@@ -10,7 +10,7 @@ import {escapeHtml as esc} from './scouting.mjs';
 // Editable default pool (CS2 Active Duty as assumed for late 2026). Maps outside the pool still get pages.
 export const DEFAULT_POOL=Object.freeze(['de_ancient','de_anubis','de_dust2','de_inferno','de_mirage','de_nuke','de_overpass']);
 // A habit is reported when it holds in at least `share` of at least `minRounds` rounds.
-export const HABIT_LIMITS=Object.freeze({minRounds:4,anchorShare:.6,setupShare:.4,stackShare:.3,utilityShare:.5,awpShare:.5,placeOpenings:3,lowTrade:.35,forceShare:.5,minClutches:2});
+export const HABIT_LIMITS=Object.freeze({minRounds:4,anchorShare:.6,setupShare:.4,stackShare:.3,utilityShare:.5,awpShare:.5,placeOpenings:3,lowTrade:.35,forceShare:.5,minClutches:2,duelEdge:.15,tightTiming:4,minTimingRounds:5});
 const SMALL=10;
 const pct=v=>`${Math.round(v*100)}%`;
 const sideName=s=>s===2?'T':'CT';
@@ -43,13 +43,21 @@ export function vetoSuggestion(results,{pool=DEFAULT_POOL,minRounds=HABIT_LIMITS
   const line=r=>`${r.map}: ${pct(r.winRate)} of rounds won (${r.sample}), matches ${r.matchWins}-${r.matchLosses}${r.matchDraws?`-${r.matchDraws}`:''}`;
   const notes=['Heuristic: based only on the imported demos of this opponent, not on your own map strength.'];
   if(!reliable.length&&seen.length)notes.push(`Small sample: no map has ${minRounds}+ decided rounds.`);
+  const thin=seen.filter(r=>r.demos<2).map(r=>`${r.map} (${r.demos} demo)`);
+  if(thin.length)notes.push(`Weak data: only one demo for ${thin.join(', ')}; one match result can flip this ranking.`);
   if(unseen.length)notes.push(`No demos for ${unseen.join(', ')}: they may be their permaban or untested, so treat them as unknown.`);
   return {ban:ban&&{map:ban.map,reason:`Their strongest map. ${line(ban)}.`},pick:pick&&pick.map!==ban?.map?{map:pick.map,reason:`Their weakest map. ${line(pick)}.`}:null,
     ranking:ranked.map(line),unseen,notes,heuristic:true};
 }
 
 const habit=(kind,text,count,total,counter,evidence,extra={})=>({kind,text,count,total,share:total?count/total:0,sample:of(count,total),
-  small:total<SMALL,counter,evidence:refs(evidence),heuristic:true,...extra});
+  small:total<SMALL,counter:total<SMALL?`Check the evidence rounds first. ${counter}`:counter,evidence:refs(evidence),heuristic:true,...extra});
+
+// Top reads of one map: the strongest non-small habits on both sides, weighted by share and sample size.
+export function topReads(sides,n=3){
+  const all=sides.flatMap(s=>s.habits.filter(h=>!h.small).map(h=>({...h,side:s.side})));
+  return all.sort((a,b)=>b.share*Math.sqrt(b.total)-a.share*Math.sqrt(a.total)).slice(0,n);
+}
 
 // Exploitable habits of one map side. `pos` = sideSetups(), `tend` = one side of tendencyAnalysis(), `buys` =
 // buyLibrary side. Only core players are named; stand-ins appear as team totals and stand-in notes.
@@ -73,8 +81,9 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   if(side===3&&st&&st.plants.count>=L.minRounds)out.push(habit('retake',`Retake (no CT left on the plant site at the plant)`,st.plants.retakes,st.plants.count,
     st.plants.retakeShare>=.3?'They give up sites often: plant fast and set a post-plant crossfire.':'They hold sites at the plant: bring utility for the entry.',[],{unit:'plants'}));
   const o=tend?.duels?.openings;
-  if(o&&o.count>=L.minRounds)out.push(habit('openings',`Opening duels won`,o.wins,o.count,
-    o.winRate>=.55?'They win the first duel often: avoid dry peeks, trade in pairs.':'They lose the first duel often: take early fights with a trade ready.',[],{unit:'openings'}));
+  // Only a clear edge over a 50 % coin flip is a habit (default 15 points).
+  if(o&&o.count>=L.minRounds&&Math.abs(o.winRate-.5)>=L.duelEdge)out.push(habit('openings',`Opening duels won`,o.wins,o.count,
+    o.winRate>=.5?'They win the first duel often: avoid dry peeks, trade in pairs.':'They lose the first duel often: take early fights with a trade ready.',[],{unit:'openings'}));
   // Opening spots where they clearly win or clearly lose the first duel (70 % / 30 %).
   for(const p of (tend?.duels?.places??[]).filter(p=>p.count>=L.placeOpenings&&(p.wins/p.count>=.7||p.wins/p.count<=.3)).slice(0,3))out.push(habit('opening-place',`Opening duels at ${p.place} (${p.zone}) won`,p.wins,p.count,
     p.wins/p.count>=.7?`Do not dry-peek ${p.place}; use utility or a second angle.`:`Challenge ${p.place} early: they lose that duel more often than not.`,p.evidence,{unit:'openings there'}));
@@ -83,9 +92,13 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
     'They trade rarely: isolate players and take 1v1 fights.',[],{unit:'deaths'}));
   for(const [type,label] of [['smoke','Smoke'],['fire','Molly'],['flash','Flash']]){
     const c=tend?.utility?.types?.[type]?.clusters?.[0];
-    const where=c&&(c.place&&c.place!=='unknown'?c.place:`unknown callout (x ${Math.round(c.x)}, y ${Math.round(c.y)})`);
-    if(c&&c.share>=L.utilityShare&&rounds>=L.minRounds)out.push(habit('utility',`${label} near ${where} at ${c.medianSeconds.toFixed(0)} s (25-75 %: ${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s)`,c.rounds,rounds,
-      `Take that area before ${c.earlySeconds.toFixed(0)} s or wait it out; it lands at a fixed time.`,c.evidence));
+    // Clusters without a nearby callout are dropped: raw coordinates are not usable before a match.
+    if(!c||!c.place||c.place==='unknown'||c.share<L.utilityShare||rounds<L.minRounds)continue;
+    // "Fixed timing" only for a tight window (25-75 % range <= 4 s) seen in 5+ rounds; otherwise just the window.
+    const fixed=c.lateSeconds-c.earlySeconds<=L.tightTiming&&c.rounds>=L.minTimingRounds;
+    out.push(habit('utility',`${label} near ${c.place} at ${c.medianSeconds.toFixed(0)} s (25-75 %: ${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s)${fixed?', fixed timing':', timing varies'}`,c.rounds,rounds,
+      fixed?`Take that area before ${c.earlySeconds.toFixed(0)} s or wait it out; it lands at a fixed time.`
+        :`Expect ${label.toLowerCase()} there in most rounds, but the timing varies (${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s): do not plan a timing around it.`,c.evidence,{fixed}));
   }
   // T full buys: the plant site they choose most (rounds without a plant do not count as a route).
   const full=(buys?.types??[]).find(t=>t.type==='full'),plant=full?.routes?.find(r=>/^[AB] plant$/.test(r.name));
@@ -121,7 +134,7 @@ export function antiStratReport(entries,detection,{mapDefs={},pool=DEFAULT_POOL,
   const results=opponentMapResults(entries,detection);
   const maps=results.map(res=>{const pm=positions.maps.find(m=>m.map===res.map),tm=tendencies.maps.find(m=>m.map===res.map),bm=lib.maps.find(m=>m.map===res.map);
     const side=s=>({side:s,rounds:(s===2?tm?.t:tm?.ct)?.rounds??0,habits:sideHabits(s,{pos:s===2?pm?.t:pm?.ct,tend:s===2?tm?.t:tm?.ct,buys:bm?.sides.find(x=>x.side===s)})});
-    return {map:res.map,results:res,sites:Boolean(pm?.sites),sides:[side(3),side(2)],standIns:standInNotes(detection,res.map)};});
+    const sides=[side(3),side(2)];return {map:res.map,results:res,sites:Boolean(pm?.sites),sides,top:topReads(sides),standIns:standInNotes(detection,res.map)};});
   return {title,notes,generated:new Date().toISOString().slice(0,10),demos:detection.demos.length,total:detection.total,rounds:r.length,
     core:detection.players.filter(p=>p.core).map(p=>({name:p.name,description:p.description})),standIns:standInNotes(detection),
     veto:vetoSuggestion(results,{pool}),economy:economyNotes(tendencies.economy),maps,
@@ -150,6 +163,8 @@ export function renderAntiStrat(report,format='markdown',{play=false,fragment=pl
     H(2,'Economy (all maps)'),list(report.economy)];
   for(const m of report.maps){const r=m.results;
     parts.push(H(2,`${m.map}: how to beat them`),P(`${r.demos} ${r.demos===1?'demo':'demos'}, matches ${r.matchWins}-${r.matchLosses}${r.matchDraws?`-${r.matchDraws}`:''}; rounds won ${r.winRate===null?'—':pct(r.winRate)} (${r.sample}); CT ${r.sideRates[3]===null?'—':pct(r.sideRates[3])}, T ${r.sideRates[2]===null?'—':pct(r.sideRates[2])}.${m.sites?'':' No calibrated bombsites for this map: zones fall back to callouts only.'}`));
+    const top=(m.top??[]).map(h=>({...h,text:`${sideName(h.side)}: ${h.text}`}));
+    parts.push(H(3,'Top reads (10+ rounds)'),top.length?list(top):P('No habit with 10+ rounds yet: treat every line below as a lead to check in the evidence rounds.'));
     for(const s of m.sides)parts.push(H(3,`Their ${sideName(s.side)} side (${s.rounds} rounds)`),list(s.habits));
     if(m.standIns.length)parts.push(H(3,'Stand-in notes'),plain(m.standIns));
   }
