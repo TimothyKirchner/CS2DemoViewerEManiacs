@@ -5,8 +5,7 @@ _Updated 2026-11-10 (Claude, coach review loop for both analysers)_
 Coach-evaluate-improve loop on branch `feature/coach-loop` (pushed, 20+ small commits). Persona prompts in
 `scripts/coach-persona.md` (ESEA anti-strat coach; self-review coach). Every round's report and verdict are
 in Git-ignored `review-out/coach-rounds/opponent/rN/` and `review-out/coach-rounds/review/rN/`.
-PR to main still to open: https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/compare/main...feature/coach-loop
-(gh CLI missing; the Claude browser pane was not signed in to GitHub on 10 Nov).
+Merged to main on 10 Nov as PR #4: https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/4
 
 ## Coach trajectory
 - Opponent analyser (4 demos of one opponent, Downloads/demos/28_10): r1 5.5, r2 6.8, r3 7.3, r4 7.8,
@@ -26,7 +25,7 @@ PR to main still to open: https://github.com/TimothyKirchner/CS2DemoViewerEMania
   flash note, bomb roundClock for the hub view), *.v8 ignored.
 
 ## Next steps
-- Open the PR and merge when tests pass (Frank approved merging). Rerun `tests/session-smoke.cjs` in Electron.
+- Rerun `tests/session-smoke.cjs` in Electron (not run yet).
 - Remaining coach asks (not blocking): ancient T utility and hit-site by buy type, pistol setups, evidence on
   plant-split/economy rows, decisions/scope component breakdown, picks sorted by win-chance swing.
 
