@@ -25,7 +25,7 @@ Merged to main on 10 Nov as PR #4: https://github.com/TimothyKirchner/CS2DemoVie
   flash note, bomb roundClock for the hub view), *.v8 ignored.
 
 ## Next steps
-- Rerun `tests/session-smoke.cjs` in Electron (not run yet).
+- Electron smoke test (tests/session-smoke.cjs) passed after the merge (10 Nov).
 - Remaining coach asks (not blocking): ancient T utility and hit-site by buy type, pistol setups, evidence on
   plant-split/economy rows, decisions/scope component breakdown, picks sorted by win-chance swing.
 
