@@ -70,7 +70,7 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
   const o = {...INSTRUCTIVE_DEFAULTS, ...opts}, round = replay.rounds[index], rate = replay.tickRate, out = [];
   // Round time left; after the plant the bomb timer instead.
   const planted = round.events.find(e => e.event_name === "bomb_planted" && e.tick >= round.live && e.tick <= round.end);
-  const at = t => planted && t > planted.tick ? `${mmss(Math.max(0, BOMB_SECONDS - (t - planted.tick) / rate))} on the bomb` : clock(round, t, rate), nm = id => playerName(replay, id);
+  const at = t => planted && t > planted.tick ? `${mmss(Math.max(0, BOMB_SECONDS - (t - planted.tick) / rate))} (bomb)` : clock(round, t, rate), nm = id => playerName(replay, id);
   const roster = (frameBefore(round.frames, round.live)?.players ?? []).filter(p => p.team === 2 || p.team === 3);
   const self = roster.find(p => p.id === me); if (!self) return out;
   const team = self.team, teams = new Map(roster.map(p => [p.id, p.team])), teamOf = id => teams.get(String(id));
@@ -263,7 +263,7 @@ export function instructiveMarkdown(result, {demo = "", plan = ""} = {}) {
   const lines = [
     `# Instructive rounds: ${result.player.name} on ${result.map}`, "",
     `Demo: ${demo || "?"} · ${result.rounds} rounds · ${result.tickRate} ticks/s · ${result.picks.length} picks from ${result.candidates} candidate rounds.`,
-    `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant the bomb timer, marked \"on the bomb\"). Spectate: ${result.player.name}.`,
+    `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant the bomb timer, marked (bomb)). Spectate: ${result.player.name}.`,
     "Confidence: high = from game events, medium = from sampled positions/inventories, low = judgement call.", "",
     "| # | Round | Type | Category | Conf. | Demo time | Clip window | Why / what to look at |", "|---|---|---|---|---|---|---|---|"
   ];
