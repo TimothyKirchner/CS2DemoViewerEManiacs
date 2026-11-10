@@ -34,7 +34,9 @@ function setup(){
 test('zones use the bombsite callout, then calibrated site anchors',()=>{
   assert.equal(zoneOf(MAP,{x:1900,y:100,place:'Anything'}),'A');
   assert.equal(zoneOf(MAP,{x:0,y:0,place:'BombsiteA'}),'A','bombsite callout wins over anchors');
-  assert.equal(zoneOf(MAP,{x:-1900,y:0,place:'Middle'}),'B');
+  assert.equal(zoneOf(MAP,{x:-1900,y:0,place:'Middle'}),'mid','mid callouts never count as a site');
+  assert.equal(zoneOf(MAP,{x:-1900,y:0,place:'Ramp'}),'B');
+  assert.equal(zoneOf({...MAP,name:'Anubis'},{x:-1900,y:0,place:'Canal'}),'mid','per-map mid callouts by map name');
   assert.equal(zoneOf({},{x:0,y:0,place:'BombsiteB'}),'B');
   assert.equal(zoneOf({},{x:0,y:0,place:'Middle'}),'mid');
   assert.equal(setupLabel({A:2,mid:1,B:2}),'A 2 / mid 1 / B 2');
