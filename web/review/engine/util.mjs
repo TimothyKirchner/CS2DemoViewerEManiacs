@@ -20,7 +20,7 @@ const PRICES = {
   hegrenade:300, highexplosivegrenade:300, flashbang:200, smokegrenade:300, molotov:400, incgrenade:500, incendiarygrenade:500,
   decoy:50, decoygrenade:50, taser:200, zeusx27:200
 };
-const GRENADES = /(hegrenade|highexplosive|flashbang|smokegrenade|molotov|incgrenade|incendiary|decoy)/;
+export const GRENADES = /(hegrenade|highexplosive|flashbang|smokegrenade|molotov|incgrenade|incendiary|decoy)/;
 const PISTOL = /^(glock|glock18|usps|hkp2000|p2000|p250|fiveseven|tec9|cz75a|cz75auto|elite|dualberettas|deagle|deserteagle|revolver|r8revolver)$/;
 const SMG = /^(mac10|mp9|mp7|mp5sd|ump45|p90|bizon|ppbizon)$/;
 const RIFLE = /^(galilar|famas|ak47|m4a1|m4a4|m4a1silencer|m4a1s|sg556|sg553|aug)$/;

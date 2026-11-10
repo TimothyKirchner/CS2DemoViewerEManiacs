@@ -1,12 +1,12 @@
 // Finds one focus player's most instructive rounds (mistakes and good examples) and turns their key
 // moments into clip windows. The plan output is a normal recording plan (clip-plan.mjs), so
 // recorder/record-clips.mjs --plan can record it once demo playback works again.
-import {frameBefore, equipmentValue, primaryValue, clock, winnerTeam, grenadeCount, key} from "./util.mjs";
+import {frameBefore, equipmentValue, primaryValue, clock, winnerTeam, grenadeCount, key, itemName, GRENADES} from "./util.mjs";
 import {TIPS} from "./clips.mjs";
 import {buildRecordingPlan, accountId} from "./clip-plan.mjs";
 
 export const INSTRUCTIVE_VERSION = 1;
-export const INSTRUCTIVE_DEFAULTS = {max: 8, minEach: 2, minScore: 1.5, leadSeconds: 6, deathLeadSeconds: 12, tailSeconds: 3, tradeSeconds: 5, maxDeaths: 4, aloneUnits: 1000};
+export const INSTRUCTIVE_DEFAULTS = {max: 8, minEach: 2, minScore: 1.5, leadSeconds: 6, deathLeadSeconds: 12, tailSeconds: 3, tradeSeconds: 5, maxDeaths: 4, aloneUnits: 1000, closeUnits: 450};
 // Picks whose primary category is one of your deaths; at most maxDeaths of them, so highlights and other mistakes show too.
 const DEATHS = new Set(["opening-death-lost", "opening-death", "untraded-death"]);
 
@@ -84,23 +84,26 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
   // grenades still in hand. The cause picks the look-at text instead of one template for every death.
   const deathContext = d => {
     const f = frameBefore(round.frames, d.tick), meP = f?.players.find(p => p.id === me), facts = [], causes = [];
-    if (meP?.place) facts.push(`at ${meP.place}`);
+    if (meP?.place) facts.push(`you at ${meP.place}`);
     if (d.weapon) facts.push(`(${key(d.weapon)}${d.headshot ? ", headshot" : ""})`);
     const blind = round.events.find(e => e.event_name === "player_blind" && String(e.user_steamid) === me && teamOf(e.attacker_steamid) !== team && e.tick <= d.tick && e.tick >= d.tick - 3 * rate && Number(e.blind_duration ?? 1) > 0.7);
     if (blind) causes.push("flashed");
     const mates = (f?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false && meP);
     const near = mates.length ? Math.min(...mates.map(p => Math.hypot(p.x - meP.x, p.y - meP.y))) : null;
     if (near !== null && near > o.aloneUnits) causes.push("alone");
-    const nades = meP ? grenadeCount(meP) : 0; if (nades >= 2) causes.push("utility");
+    const nades = meP ? grenadeCount(meP) : 0, types = meP ? (meP.inventory ?? []).map(itemName).filter(n => GRENADES.test(key(n))).map(n => key(n).replace(/grenade$/, "")) : [];
+    if (nades >= 2) causes.push("utility");
+    if (near !== null && near <= o.closeUnits) causes.push("close");
     const parts = facts.length ? [facts.join(" ")] : [];
-    if (blind) parts.push("while flashed");
+    parts.push(blind ? "flashed" : "not flashed");
     if (near !== null) parts.push(`nearest teammate ${Math.round(near)} units away`);
-    if (nades) parts.push(`${nades} grenade${nades > 1 ? "s" : ""} unused`);
+    parts.push(nades ? `unused: ${types.join(", ") || `${nades} grenade${nades > 1 ? "s" : ""}`}` : "no grenades left");
     const look = causes[0] === "flashed" ? "You were flashed before the duel: watch the flash come, and whether you could turn away or fall back behind cover."
       : causes[0] === "alone" ? "You took the duel far from your team: was there a teammate close enough to trade, or should you have fallen back or waited?"
       : causes[0] === "utility" ? "You died with utility in hand: which grenade could have taken this fight for you (flash before the peek, smoke the angle)?"
+      : causes[0] === "close" ? "A teammate was close but the kill was not traded back fast: check spacing and timing (was he ready to swing with you, or were you peeking the same angle?)."
       : null;
-    return {text: parts.length ? ` ${parts.join(", ")}` : "", look};
+    return {text: parts.length ? `: ${parts.join(", ")}` : "", look};
   };
   const addDeath = (type, score, d, head, tail) => { const c = deathContext(d); add(type, score, [deathMoment(d)], `${head}${c.text}${tail}`); if (c.look) out.at(-1).look = c.look; };
 
@@ -143,7 +146,10 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     const kills = myKills.filter(k => k.tick > plant.tick), died = myDeath && myDeath.tick > plant.tick ? myDeath : null;
     const moments = [{tick: plant.tick, label: "Bomb planted"}, ...killMoments(kills), ...(died ? [deathMoment(died)] : []), ...(outcome ? [{tick: outcome.tick, label: outcome.event_name === "bomb_defused" ? "Bomb defused" : "Bomb exploded"}] : [])];
     const why = `Alive at the plant (${at(plant.tick)} left)${kills.length ? `, ${kills.length} kill${kills.length > 1 ? "s" : ""} after it` : ""}; ${outcome ? outcome.event_name === "bomb_defused" ? "bomb defused" : "bomb exploded" : won ? "round won" : "round lost"}.`;
-    if (team === 2) add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, why);
+    // Lost post-plant: say how it was lost for you (died and to whom, or alive while they defused).
+    const lostWhy = died ? `${why} You died after the plant to ${died.attacker_steamid ? nm(died.attacker_steamid) : "?"} with ${at(died.tick)} left${deathContext(died).text}.`
+      : `${why} You were alive when it was defused: check whether you could hear or contest the defuse.`;
+    if (team === 2) add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, won ? why : lostWhy);
     else add(won ? "retake-won" : "retake-lost", won ? 3 + 0.5 * kills.length : 2, moments, why);
   }
 

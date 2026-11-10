@@ -146,10 +146,11 @@ test('scoreboard counts exit frags but not deaths after the final round', async 
 
 test('death picks carry the cause: callout, weapon, distance to the team and a cause-specific look-at',()=>{
   const near=instructiveRounds(match([SPECS[0]]),null,{player:'1'}).picks[0];
-  assert.match(near.why,/^Died first with \d:\d\d left to P6.*nearest teammate 100 units away; the team lost the round\.$/);
+  assert.match(near.why,/^Died first with \d:\d\d left to P6.*nearest teammate 100 units away, no grenades left; the team lost the round\.$/);
+  assert.match(near.why,/not flashed/);assert.match(near.lookAt,/teammate was close/);
   const far=match([{...SPECS[0],place:(id)=>id===1?{x:3000,place:'Canal',inventory:['AK-47','Flashbang','Smoke Grenade']}:{}}]);
   const pick=instructiveRounds(far,null,{player:'1'}).picks[0];
-  assert.match(pick.why,/at Canal/);assert.match(pick.why,/2 grenades unused/);
+  assert.match(pick.why,/you at Canal/);assert.match(pick.why,/unused: flashbang, smoke/);
   assert.match(pick.lookAt,/far from your team/);
   const w=pick.windows[0];assert.ok(w.seconds>=12,'deaths get a longer lead');
 });
