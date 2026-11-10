@@ -154,10 +154,10 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     // Lost post-plant: say how it was lost for you (died and to whom, or alive while they defused).
     const lostWhy = died ? `${why} You died after the plant to ${died.attacker_steamid ? nm(died.attacker_steamid) : "?"} with ${at(died.tick)} left${deathContext(died).text}.`
       : `${why} You were alive when it was defused: check whether you could hear or contest the defuse.`;
-    if (team === 2) add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, won ? why : lostWhy);
+    if (team !== 2) add(won ? "retake-won" : "retake-lost", won ? 3 + 0.5 * kills.length : 2, moments, why);
+    else add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, won ? why : lostWhy);
     if (team === 2 && !won && died) { const mates = (frameBefore(round.frames, died.tick)?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false), meP = frameBefore(round.frames, died.tick)?.players.find(p => p.id === me);
       if (meP && mates.some(p => Math.hypot(p.x - meP.x, p.y - meP.y) <= o.closeUnits)) out.at(-1).look = "You and a teammate held the bomb from the same spot: one grenade or one swing can take both, so split into a crossfire with separate angles."; }
-    else add(won ? "retake-won" : "retake-lost", won ? 3 + 0.5 * kills.length : 2, moments, why);
   }
 
   // Saved weapon: alive at the end of a lost round with a rifle/AWP.

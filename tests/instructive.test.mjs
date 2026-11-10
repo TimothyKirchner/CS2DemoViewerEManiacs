@@ -182,3 +182,9 @@ test('highlights fill at most half the picks while mistakes remain',()=>{
   const picks=choose([...[1,2,3,4,5,6].map(n=>c(n,'highlight',9)),c(7,'mistake',1),c(8,'mistake',1)],{max:6,minEach:1});
   assert.equal(picks.filter(p=>p.kind==='highlight').length,4);assert.equal(picks.filter(p=>p.kind==='mistake').length,2);
 });
+
+test('a won T post-plant is never labelled as a retake',()=>{
+  const replay=match([{winner:2,events:l=>[{tick:l+R*30,event_name:'bomb_planted'},death(l+R*35,6,1),{tick:l+R*70,event_name:'bomb_exploded'}]}]);
+  const types=instructiveRounds(replay,null,{player:'1'}).picks.flatMap(p=>p.categories.map(c=>c.type));
+  assert.ok(types.includes('afterplant-won'));assert.ok(!types.some(t=>t.startsWith('retake')));
+});
