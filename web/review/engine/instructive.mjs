@@ -1,7 +1,7 @@
 // Finds one focus player's most instructive rounds (mistakes and good examples) and turns their key
 // moments into clip windows. The plan output is a normal recording plan (clip-plan.mjs), so
 // recorder/record-clips.mjs --plan can record it once demo playback works again.
-import {frameBefore, equipmentValue, primaryValue, clock, winnerTeam, grenadeCount, key, itemName, GRENADES} from "./util.mjs";
+import {frameBefore, equipmentValue, primaryValue, clock, winnerTeam, grenadeCount, key, itemName, GRENADES, BOMB_SECONDS} from "./util.mjs";
 import {TIPS} from "./clips.mjs";
 import {buildRecordingPlan, accountId} from "./clip-plan.mjs";
 
@@ -68,7 +68,9 @@ export function findPlayer(replay, query) {
 
 export function roundCategories(replay, index, me, opts = {}, findings = []) {
   const o = {...INSTRUCTIVE_DEFAULTS, ...opts}, round = replay.rounds[index], rate = replay.tickRate, out = [];
-  const at = t => clock(round, t, rate), nm = id => playerName(replay, id);
+  // Round time left; after the plant the bomb timer instead.
+  const planted = round.events.find(e => e.event_name === "bomb_planted" && e.tick >= round.live && e.tick <= round.end);
+  const at = t => planted && t > planted.tick ? `${mmss(Math.max(0, BOMB_SECONDS - (t - planted.tick) / rate))} on the bomb` : clock(round, t, rate), nm = id => playerName(replay, id);
   const roster = (frameBefore(round.frames, round.live)?.players ?? []).filter(p => p.team === 2 || p.team === 3);
   const self = roster.find(p => p.id === me); if (!self) return out;
   const team = self.team, teams = new Map(roster.map(p => [p.id, p.team])), teamOf = id => teams.get(String(id));
@@ -197,8 +199,10 @@ export function instructiveRounds(replay, review, opts = {}) {
     const moments = cats.flatMap(c => c.moments.map(m => ({...m, kind: c.kind, look: c.look, severity: c.kind === "highlight" ? 1 : c.score >= 3.5 ? 3 : c.score >= 2 ? 2 : 1})));
     const windows = clipWindows(moments, round, rate, o), keyTick = primary.moments[0].tick;
     // Win-probability swing of the key moment for your team (hand-set model, an estimate).
-    const wp = review?.rounds?.[index]?.winProbability ?? [], at = wp.findIndex(x => x.tick >= keyTick), sign = self?.team === 2 ? 1 : -1;
-    const swing = at > 0 && wp[at].tick === keyTick ? {before: r2(sign > 0 ? wp[at - 1].t : 1 - wp[at - 1].t), after: r2(sign > 0 ? wp[at].t : 1 - wp[at].t)} : null;
+    // From just before the first moment of the primary category to just after its last one.
+    const wp = review?.rounds?.[index]?.winProbability ?? [], lastTick = primary.moments.at(-1).tick, sign = self?.team === 2 ? 1 : -1, mine = x => r2(sign > 0 ? x.t : 1 - x.t);
+    const pre = wp.filter(x => x.tick < keyTick).at(-1), post = wp.filter(x => x.tick <= lastTick).at(-1);
+    const swing = pre && post && post.tick >= keyTick ? {before: mine(pre), after: mine(post)} : null;
     candidates.push({
       round: index, roundNumber: round.number, score: r1(total), kind: bad >= 2 && good >= 2 ? "mixed" : bad >= good ? "mistake" : "highlight",
       category: primary.type, title: primary.title, confidence: primary.confidence, why: primary.why, lookAt: primary.look,
@@ -259,7 +263,7 @@ export function instructiveMarkdown(result, {demo = "", plan = ""} = {}) {
   const lines = [
     `# Instructive rounds: ${result.player.name} on ${result.map}`, "",
     `Demo: ${demo || "?"} · ${result.rounds} rounds · ${result.tickRate} ticks/s · ${result.picks.length} picks from ${result.candidates} candidate rounds.`,
-    `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant this is not the bomb timer). Spectate: ${result.player.name}.`,
+    `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant the bomb timer, marked \"on the bomb\"). Spectate: ${result.player.name}.`,
     "Confidence: high = from game events, medium = from sampled positions/inventories, low = judgement call.", "",
     "| # | Round | Type | Category | Conf. | Demo time | Clip window | Why / what to look at |", "|---|---|---|---|---|---|---|---|"
   ];
