@@ -72,8 +72,8 @@ export function roundDecisions(ctx) {
   // Effective flashes: enemy blinded >=1.5s and killed by the flasher's team while blind.
   for (const b of blinds) {
     if (!b.attacker_steamid || b.attacker_team_num === b.user_team_num || !(b.blind_duration >= 1.5)) continue;
-    const kill = deaths.find(d => String(d.user_steamid) === String(b.user_steamid) && d.tick >= b.tick && d.tick <= b.tick + b.blind_duration * rate && d.attacker_team_num === b.attacker_team_num);
-    if (kill) add({player: String(b.attacker_steamid), tick: b.tick, related: [String(b.user_steamid)], kind: "highlight", type: "flash-assist", severity: sev.low, title: "Flash enabled a kill", detail: `${name(replay, b.user_steamid)} blinded ${b.blind_duration.toFixed(1)}s and killed by ${name(replay, kill.attacker_steamid)}.`});
+    const kill = deaths.find(d => String(d.user_steamid) === String(b.user_steamid) && d.tick >= b.tick && d.tick <= b.tick + b.blind_duration * rate && d.attacker_team_num === b.attacker_team_num && String(d.attacker_steamid) !== String(b.attacker_steamid));
+    if (kill) add({player: String(b.attacker_steamid), tick: b.tick, related: [String(b.user_steamid)], kind: "highlight", type: "flash-assist", severity: sev.low, title: "Your flash led to a teammate's kill (not always a game flash assist)", detail: `${name(replay, b.user_steamid)} blinded ${b.blind_duration.toFixed(1)}s and killed by ${name(replay, kill.attacker_steamid)}.`});
   }
   multiKillsAndClutches(ctx, deaths, add);
   return out;

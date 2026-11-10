@@ -50,6 +50,7 @@ test('opening duels by place and core player; trades within 5 s',()=>{
   const b=t.places.find(p=>p.place==='BombsiteB');assert.equal(b.wins,1);assert.equal(b.zone,'B');
   assert.ok(t.players.every(p=>d.core.includes(p.id)),'per-player rows are core only');assert.equal(t.players.some(p=>p.id==='s1'),false);
   assert.equal(t.trades.deaths,2);assert.equal(t.trades.sample,'1 of 2 deaths');assert.equal(t.trades.traded,1);assert.equal(t.trades.pairs[0].label,'Name o2 for Name o1');assert.equal(t.trades.medianSeconds,2);
+  assert.ok(Number.isFinite(t.trades.baseline.deaths)&&t.trades.baseline.deaths>0,'trade baseline from their opponents');
   assert.equal(t.trades.openingDeaths,1);assert.equal(t.trades.openingTraded,0);
 });
 

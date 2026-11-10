@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Tendencies check on real demos (no CS2, no UI).
-// Usage: node scripts/opponent-tendencies.mjs <demo.dem|folder>... [--json <out.json>]
+// Usage: node scripts/opponent-report.mjs <demo.dem|folder>... [--md out.md] [--html out.html] [--cache <dir>]
 // Prints counts per map and side (openings, trades, stacks, retakes, utility clusters, clutches) plus economy
 // and timeouts. No player names or SteamIDs; keep the JSON local (review-out/ is Git-ignored).
 import fs from "node:fs";
+import v8 from "node:v8";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {makeEntry} from "../web/session.mjs";
@@ -11,7 +12,7 @@ import {detectOpponent} from "../web/opponent.mjs";
 import {antiStratReport, renderAntiStrat} from "../web/opponent-report.mjs";
 import {parseDemFile} from "../recorder/record-clips.mjs";
 
-const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i >= 0 ? args.splice(i, 2)[1] : null; }, out = opt("--md"), html = opt("--html");
+const args = process.argv.slice(2), opt = k => { const i = args.indexOf(k); return i >= 0 ? args.splice(i, 2)[1] : null; }, out = opt("--md"), html = opt("--html"), cacheDir = opt("--cache");
 if (!args.length) { console.error("Pass one or more .dem files or folders."); process.exit(1); }
 const files = args.flatMap(p => fs.statSync(p).isDirectory() ? fs.readdirSync(p).filter(f => /\.dem$/i.test(f)).sort().map(f => path.join(p, f)) : [p]);
 const mapDefs = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../web/maps/maps.json"), "utf8"));
@@ -26,8 +27,13 @@ function slim(replay) {
 
 const entries = [];
 for (const file of files) {
-  const started = Date.now(), {replay} = await parseDemFile(file);
-  entries.push(makeEntry(slim(replay), {id: path.basename(file)}));
+  const started = Date.now(), st = fs.statSync(file);
+  // Optional cache of the slimmed replay (keyed by file name, size and mtime) to rerun the report quickly.
+  const cached = cacheDir && path.join(cacheDir, `${path.basename(file)}.${st.size}.${Math.round(st.mtimeMs)}.v8`);
+  let replay;
+  if (cached && fs.existsSync(cached)) replay = v8.deserialize(fs.readFileSync(cached));
+  else { replay = slim((await parseDemFile(file)).replay); if (cached) { fs.mkdirSync(cacheDir, {recursive: true}); fs.writeFileSync(cached, v8.serialize(replay)); } }
+  entries.push(makeEntry(replay, {id: path.basename(file)}));
   console.error(`parsed ${path.basename(file)}: ${replay.map}, ${replay.rounds.length} rounds, ${((Date.now() - started) / 1000).toFixed(1)} s`);
 }
 const d = detectOpponent(entries);

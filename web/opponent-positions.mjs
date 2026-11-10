@@ -40,11 +40,22 @@ export function filterRounds(refs,{map,side,buyType,score}={},{buyRounds=[],scor
     &&(!score||scores.get(refKey(r))?.state===score));
 }
 
-// A for site A, B for site B, else mid. The game's bombsite callout decides first, then the nearest
-// calibrated site anchor; everything else (and maps without anchors) counts as mid.
+// Callouts that are never part of a site, whatever their distance to a site anchor (the 1400-unit anchor
+// radius otherwise pulls e.g. anubis Middle or ancient Outside into a site).
+export const MID_CALLOUTS=Object.freeze({'*':['Middle','TopofMid','MidDoors','Mid','TSpawn','CTSpawn','TStairs'],
+  de_ancient:['Outside','TSideLower','TSideUpper'],de_anubis:['Canal','Street','CTSideUpper','TSideUpper'],de_mirage:['Connector','Window','Underpass','Jungle'],
+  de_inferno:['Mid','SecondMid','Arch'],de_dust2:['MidDoors','Xbox','Catwalk','LowerTunnel'],de_nuke:['Lobby','Mini','Silo','Hut'],de_overpass:['Fountain','Connector','Underpass']});
+const midSet=new Map();
+const isMidCallout=(mapDef,place)=>{const name=String(mapDef?.map??mapDef?.name??'').toLowerCase(),key=name.startsWith('de_')?name:`de_${name}`;
+  if(!midSet.has(key))midSet.set(key,new Set([...MID_CALLOUTS['*'],...(MID_CALLOUTS[key]??[])].map(x=>x.toLowerCase())));
+  return midSet.get(key).has(place.toLowerCase());};
+
+// A for site A, B for site B, else mid. The game's bombsite callout decides first, then known mid callouts,
+// then the nearest calibrated site anchor; everything else (and maps without anchors) counts as mid.
 export function zoneOf(mapDef,p){
   const place=String(p.place??'');
   if(/^bombsite_?a$/i.test(place))return 'A';if(/^bombsite_?b$/i.test(place))return 'B';
+  if(place&&isMidCallout(mapDef,place))return 'mid';
   const site=siteOf(mapDef,p.x,p.y);return site==='A'||site==='B'?site:'mid';
 }
 export const setupLabel=zones=>`A ${zones.A??0} / mid ${zones.mid??0} / B ${zones.B??0}`;
@@ -202,7 +213,7 @@ export function positionAnalysis(entries,detection,refs,{mapDefs={},buyRounds=[]
     ct:sideSetups(entries,kept.filter(r=>r.map===map&&r.side===3),{mapDefs,detection,names}),
     t:sideSetups(entries,kept.filter(r=>r.map===map&&r.side===2),{mapDefs,detection,names})})),
     warnings:[
-      `Heuristic: setups sample living players ${SETUP_SECONDS[3]} s (CT) and ${SETUP_SECONDS[2]} s (T) after freeze end. Zone = the BombsiteA/BombsiteB callout, else the nearest calibrated bombsite within 1400 units, else mid.`,
+      `Heuristic: setups sample living players ${SETUP_SECONDS[3]} s (CT) and ${SETUP_SECONDS[2]} s (T) after freeze end. Zone = the BombsiteA/BombsiteB callout; mid callouts (Middle, Outside, Canal, spawns ...) are always mid; else the nearest calibrated bombsite within 1400 units, else mid.`,
       `Heuristic: a rotation is a zone change between the setup sample and ${AFTER_PLANT_SECONDS} s after the plant (or ${ROTATION_SECONDS} s without a plant).`,
       'Team-level tables use every matched round, stand-ins included. Player rows and named holders are core players only; a stand-in on the usual spot of an absent core player is labelled "filled by stand-in".',
       'Callouts come from the game\'s last place name for each player. AWP = AWP held or carried at the setup sample.',

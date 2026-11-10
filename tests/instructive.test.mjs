@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import {reviewReplay} from '../web/review/engine/review.mjs';
-import {instructiveRounds,instructivePlan,instructiveMarkdown,clipWindows,choose,findPlayer,mmss} from '../web/review/engine/instructive.mjs';
+import {instructiveRounds,instructivePlan,instructiveMarkdown,clipWindows,choose,findPlayer,mmss,teamBuy} from '../web/review/engine/instructive.mjs';
 import {prepareDemo,listDemos,parseArgs,demoBase} from '../scripts/instructive-rounds.mjs';
 
 // Synthetic match: T players 1-5 near x=0, CT players 6-10 far away. Player 1 is the focus player.
@@ -142,4 +142,67 @@ test('scoreboard counts exit frags but not deaths after the final round', async 
   ]};
   const s = boxScore(replay, null);
   assert.deepEqual([s.get('1').kills, s.get('2').deaths, s.get('1').deaths], [1, 1, 0]);
+});
+
+test('death picks carry the cause: callout, weapon, distance to the team and a cause-specific look-at',()=>{
+  const near=instructiveRounds(match([SPECS[0]]),null,{player:'1'}).picks[0];
+  assert.match(near.why,/^Died first with \d:\d\d left to P6.*nearest teammate 100 units away, no grenades left; the team lost the round\.$/);
+  assert.match(near.why,/no enemy flash on you/);assert.match(near.lookAt,/teammate was close/);
+  const far=match([{...SPECS[0],place:(id)=>id===1?{x:3000,place:'Canal',inventory:['AK-47','Flashbang','Smoke Grenade']}:{}}]);
+  const pick=instructiveRounds(far,null,{player:'1'}).picks[0];
+  assert.match(pick.why,/you at Canal/);assert.match(pick.why,/unused: flashbang, smoke/);
+  assert.match(pick.lookAt,/far from your team/);
+  const w=pick.windows[0];assert.ok(w.seconds>=12,'deaths get a longer lead');
+});
+
+test('ranking keeps at most maxDeaths death picks when other candidates exist',()=>{
+  const c=(n,category,score)=>({roundNumber:n,category,score,kind:category.includes('death')?'mistake':'highlight'});
+  const list=[...[1,2,3,4,5,6].map(n=>c(n,'untraded-death',5)),c(7,'multikill',1),c(8,'team-flash',1)];
+  const picks=choose(list,{max:6,minEach:1,maxDeaths:4});
+  assert.equal(picks.filter(p=>p.category==='untraded-death').length,4);
+  assert.ok(picks.some(p=>p.category==='multikill')&&picks.some(p=>p.category==='team-flash'));
+});
+
+test('picks carry the win-chance swing of the key moment for the focus team',()=>{
+  const replay=match(SPECS),review=reviewReplay(replay,{detail:null});
+  const p=instructiveRounds(replay,review,{player:'1'}).picks.find(x=>x.roundNumber===1);
+  assert.ok(p.winChance&&p.winChance.after<p.winChance.before,'dying first lowers the T win chance');
+});
+
+test('death text names the killer position and the report lists cross-round patterns',()=>{
+  const replay=match(SPECS),res=instructiveRounds(replay,reviewReplay(replay,{detail:null}),{player:'1'});
+  const p=res.picks.find(x=>x.roundNumber===1);
+  assert.match(p.why,/killer \d+ units \(\d+ m\) away/);assert.match(p.why,/no enemy flash on you in the last 3 s/);
+  assert.equal(res.patterns.rounds,5);assert.ok(res.patterns.untraded>=2);assert.equal(res.patterns.byKiller.P6,1);
+  assert.match(instructiveMarkdown(res),/Patterns: you died untraded .* of 5 rounds/);
+});
+
+test('highlights fill at most half the picks while mistakes remain',()=>{
+  const c=(n,kind,score)=>({roundNumber:n,category:kind==='highlight'?'multikill':'afterplant-lost',score,kind});
+  const picks=choose([...[1,2,3,4,5,6].map(n=>c(n,'highlight',9)),c(7,'mistake',1),c(8,'mistake',1)],{max:6,minEach:1});
+  assert.equal(picks.filter(p=>p.kind==='highlight').length,4);assert.equal(picks.filter(p=>p.kind==='mistake').length,2);
+});
+
+test('a won T post-plant is never labelled as a retake',()=>{
+  const replay=match([{winner:2,events:l=>[{tick:l+R*30,event_name:'bomb_planted'},death(l+R*35,6,1),{tick:l+R*70,event_name:'bomb_exploded'}]}]);
+  const types=instructiveRounds(replay,null,{player:'1'}).picks.flatMap(p=>p.categories.map(c=>c.type));
+  assert.ok(types.includes('afterplant-won'));assert.ok(!types.some(t=>t.startsWith('retake')));
+});
+
+test('teamBuy uses parser pistol rounds and the early buy, not a late sample',()=>{
+  const replay=match([SPECS[0],SPECS[1]]);
+  assert.equal(teamBuy(replay,0,2),'pistol','round 1 without parser data');
+  assert.equal(teamBuy({...replay,pistols:[1]},0,2),'force/half','parser pistols win over round numbers');
+  assert.equal(teamBuy({...replay,pistols:[1]},1,2),'pistol');
+});
+
+test('a traded opening death gets no "not traded" look-at; an expired flash is not a cause',()=>{
+  const traded=match([{winner:2,events:l=>[death(l+R*20,1,6),death(l+R*21,6,2)]}]);
+  const p=instructiveRounds(traded,null,{player:'1'}).picks[0];
+  assert.ok(!/not traded back/.test(p.lookAt));
+  const flash=(tick,dur)=>({tick,event_name:'player_blind',user_steamid:'1',attacker_steamid:'6',blind_duration:dur});
+  const old=match([{winner:3,events:l=>[flash(l+R*17,0.8),death(l+R*20,1,6)]}]);
+  assert.match(instructiveRounds(old,null,{player:'1'}).picks[0].why,/no enemy flash on you/);
+  const fresh=match([{winner:3,events:l=>[flash(l+R*19,1.5),death(l+R*20,1,6)]}]);
+  assert.match(instructiveRounds(fresh,null,{player:'1'}).picks[0].why,/flashed \(1\.5 s/);
 });

@@ -19,3 +19,5 @@ recorder/recorder.json
 *.dem.gz
 *.zst
 review-out/
+# Parsed-demo caches from scripts/opponent-report.mjs --cache (contain names and SteamIDs)
+*.v8

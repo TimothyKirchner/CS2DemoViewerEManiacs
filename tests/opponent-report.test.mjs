@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {opponentMapResults,vetoSuggestion,sideHabits,standInNotes,economyNotes,antiStratReport,renderAntiStrat} from '../web/opponent-report.mjs';
+import {opponentMapResults,vetoSuggestion,sideHabits,standInNotes,economyNotes,antiStratReport,renderAntiStrat,topReads} from '../web/opponent-report.mjs';
 import {detectOpponent,opponentRounds} from '../web/opponent.mjs';
 import {prepReport} from '../web/scouting.mjs';
 import {makeEntry} from '../web/session.mjs';
@@ -66,16 +66,16 @@ test('stand-in notes and economy notes carry sample sizes',()=>{
   assert.ok(notes.some(n=>n==='Name s1: stand-in, 1 of 3 demos. Not named in player habits; counts only in team totals.'));
   assert.ok(notes.some(n=>n.startsWith('1 of 2 demos on de_test had a stand-in')));
   assert.deepEqual(standInNotes(d,'de_two'),[]);
-  const e=economyNotes({rows:[{label:'After a lost T pistol',count:4,force:2,half:1,eco:1,full:0},{label:'Empty',count:0}]});
-  assert.equal(e.length,1);assert.equal(e[0].sample,'3 of 4 rounds');assert.match(e[0].counter,/Expect a force/);
-  const n=economyNotes({rows:[{label:'After a won pistol',count:6,force:0,half:0,next:[{type:'eco',label:'Eco',count:1},{type:'full',label:'Full buy',count:5}]}]});
-  assert.equal(n[0].text,'After a won pistol: next round mostly full buy');assert.equal(n[0].sample,'5 of 6 rounds');assert.match(n[0].counter,/full buy/);
+  const e=economyNotes({rows:[{label:'After a lost T pistol',count:8,force:5,half:1,eco:2,full:0},{label:'Empty',count:0}]});
+  assert.equal(e.length,1);assert.equal(e[0].sample,'6 of 8 rounds');assert.match(e[0].counter,/Expect a force/);
+  const n=economyNotes({rows:[{label:'After a won pistol',count:8,force:0,half:0,next:[{type:'eco',label:'Eco',count:1},{type:'full',label:'Full buy',count:7}]}]});
+  assert.equal(n[0].text,'After a won pistol: next round mostly full buy');assert.equal(n[0].sample,'7 of 8 rounds');assert.match(n[0].counter,/full buy/);
 });
 
 test('markdown and HTML exports; prepReport embeds the page as a section',()=>{
   const {entries,d}=setup(),report=antiStratReport(entries,d,{mapDefs,pool:['de_test','de_two'],title:'Beat <them>'});
   const md=renderAntiStrat(report,'markdown');
-  for(const s of ['# Beat <them>','## de_test: how to beat them','### Their CT side (10 rounds)','Counter (heuristic)','Ban de_test','Pick de_two','Evidence: R1 · de_test.dem (tick','Name s1: stand-in, 1 of 3 demos'])assert.ok(md.includes(s),s);
+  for(const s of ['# Beat <them>','## de_test: how to beat them','### Their CT side (10 rounds, top reads not repeated)','Counter (heuristic)','Ban de_test','Pick de_two','Evidence: R1 · de_test.dem (tick','Name s1: stand-in, 1 of 3 demos'])assert.ok(md.includes(s),s);
   assert.ok(md.includes('small sample'));// de_two has 6 rounds
   const html=renderAntiStrat(report,'html');
   assert.match(html,/^<!doctype html>/);assert.ok(html.includes('Beat &lt;them&gt;'));assert.ok(html.includes('Lead&lt;b&gt;'));assert.ok(!html.includes('Lead<b>'));assert.ok(!html.includes('data-play'));
@@ -86,4 +86,32 @@ test('markdown and HTML exports; prepReport embeds the page as a section',()=>{
   const prepHtml=prepReport({title:'Prep',sections:[{markdown:md,html:renderAntiStrat(report,'html',{fragment:true})}]},'html');
   assert.ok(prepHtml.includes('<div class="anti-strat"><h1>Beat &lt;them&gt;</h1>'));assert.equal((prepHtml.match(/<!doctype/g)??[]).length,1);
   assert.equal(prepReport({title:'Prep'}).includes('how to beat them'),false);
+});
+
+test('utility timing is "fixed" only for tight windows, unknown callouts are dropped, duels need an edge',()=>{
+  const cl=(place,early,late,rounds)=>({clusters:[{place,x:1,y:2,share:.8,rounds,medianSeconds:early+1,earlySeconds:early,lateSeconds:late,evidence:[]}]});
+  const tend=(smoke,fire,flash,wins=6,count=12)=>({rounds:12,utility:{types:{smoke,fire,flash}},duels:{openings:{wins,count,winRate:wins/count}}});
+  const h=sideHabits(3,{tend:tend(cl('Middle',7,21,10),cl('Ramp',7,8,10),cl('unknown',5,6,10))});
+  const u=h.filter(x=>x.kind==='utility');
+  assert.equal(u.length,2,'cluster without a callout is dropped');
+  assert.ok(u.find(x=>x.text.includes('Middle')).text.includes('timing varies'));
+  assert.ok(!u.find(x=>x.text.includes('Middle')).counter.includes('fixed time'));
+  assert.ok(u.find(x=>x.text.includes('Ramp')).counter.includes('lands by 8 s'),'CT utility counter is side-aware');
+  assert.equal(sideHabits(3,{tend:{rounds:4,utility:{types:{smoke:cl('Ramp',7,8,4)}}}})[0].counter,'','no counter below 5 rounds');
+  assert.ok(!h.some(x=>x.kind==='openings'),'50 % openings are no habit');
+  assert.ok(sideHabits(3,{tend:tend(null,null,null,9,12)}).some(x=>x.kind==='openings'),'75 % openings are a habit');
+  assert.ok(!JSON.stringify(h).includes('x 1'),'no raw coordinates');
+});
+
+test('top reads skip small samples; veto flags maps with one demo',()=>{
+  const sides=[{side:3,habits:[{text:'a',share:.9,total:5,small:true},{text:'b',share:.7,total:20,small:false}]},{side:2,habits:[{text:'c',share:.6,total:30,small:false}]}];
+  assert.deepEqual(topReads(sides).map(x=>x.text),['b','c'],'distance from 50 % weighted by sample');
+  const r=(map,wins,decided,demos)=>({map,wins,decided,demos,winRate:wins/decided,sample:`${wins} of ${decided}`,matchWins:1,matchLosses:0,matchDraws:0});
+  const v=vetoSuggestion([r('de_ancient',30,50,3),r('de_anubis',10,25,1)]);
+  assert.ok(v.notes.some(n=>n.includes('Weak data')&&n.includes('de_anubis')));
+});
+
+test('wording follows the number',async()=>{
+  const {often}=await import('../web/opponent-report.mjs');
+  assert.equal(often(.46),'in about half of the rounds');assert.equal(often(.7),'in most rounds');assert.equal(often(.3),'in some rounds');
 });
