@@ -55,7 +55,7 @@ export function matchSummary(replay, review, result) {
       winProbability: "Hand-set estimate from alive players, equipment, bomb and time; not fitted on match data.",
       flashAssists: "Game-credited flash assists only. Review notes also mark flashes that led to a teammate's kill without a game credit.",
       reaction: "From the game's spotted flag, which lags real visibility: values are optimistic; spotLagDuels counts duels where the lag mattered.",
-      clocks: "keyClock = time since demo start; roundClock = round time left; in the why text, times after the plant are the bomb timer , marked (bomb)."
+      clocks: "keyClock = time since demo start; roundClock and the why text = round time left, or the bomb timer marked (bomb) after the plant."
     }
   };
 }

@@ -49,14 +49,22 @@ const MULTI = {2: 1.5, 3: 3, 4: 4, 5: 5};
 
 export const mmss = seconds => { const s = Math.max(0, Math.floor(seconds)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const r1 = x => Math.round(x * 10) / 10, r2 = x => Math.round(x * 100) / 100;
-// Team buy of one side, from equipment 20 s into the round (thresholds as in the opponent analyser).
+// Team buy of one side: the highest team equipment value in the first 5 s after freeze end (thresholds as
+// in the opponent analyser). Pistol rounds come from the parser (replay.pistols), else MR12 round numbers.
 export function teamBuy(replay, index, team) {
   const round = replay.rounds[index];
-  if (index === 0 || index === 12) return "pistol";  // MR12: first round of each half
-  const f = frameBefore(round.frames, round.live + 20 * replay.tickRate), mates = (f?.players ?? []).filter(p => p.team === team);
-  if (!mates.length) return null;
-  const v = mates.reduce((s, p) => s + equipmentValue(p), 0);
+  if (Array.isArray(replay.pistols) ? replay.pistols.includes(index) : round.number === 1 || round.number === 13) return "pistol";
+  const end = round.live + 5 * replay.tickRate, frames = (round.frames ?? []).filter(f => f.tick >= round.live && f.tick <= end);
+  const values = (frames.length ? frames : [frameBefore(round.frames, round.live)].filter(Boolean))
+    .map(f => f.players.filter(p => p.team === team)).filter(m => m.length).map(m => m.reduce((s, p) => s + equipmentValue(p), 0));
+  if (!values.length) return null;
+  const v = Math.max(...values);
   return v < 5000 ? "eco" : v < 20000 ? "force/half" : "full";
+}
+// Round time left, or the bomb timer marked "(bomb)" after the plant; the same clock for text and exports.
+export function roundClockAt(round, tick, rate) {
+  const planted = round.events?.find(e => e.event_name === "bomb_planted" && e.tick >= round.live && e.tick <= round.end);
+  return planted && tick > planted.tick ? `${mmss(Math.max(0, BOMB_SECONDS - (tick - planted.tick) / rate))} (bomb)` : clock(round, tick, rate);
 }
 export function playerName(replay, id) { return replay.players.find(p => p.id === String(id))?.name ?? String(id); }
 
@@ -68,9 +76,7 @@ export function findPlayer(replay, query) {
 
 export function roundCategories(replay, index, me, opts = {}, findings = []) {
   const o = {...INSTRUCTIVE_DEFAULTS, ...opts}, round = replay.rounds[index], rate = replay.tickRate, out = [];
-  // Round time left; after the plant the bomb timer instead.
-  const planted = round.events.find(e => e.event_name === "bomb_planted" && e.tick >= round.live && e.tick <= round.end);
-  const at = t => planted && t > planted.tick ? `${mmss(Math.max(0, BOMB_SECONDS - (t - planted.tick) / rate))} (bomb)` : clock(round, t, rate), nm = id => playerName(replay, id);
+  const at = t => roundClockAt(round, t, rate), nm = id => playerName(replay, id);
   const roster = (frameBefore(round.frames, round.live)?.players ?? []).filter(p => p.team === 2 || p.team === 3);
   const self = roster.find(p => p.id === me); if (!self) return out;
   const team = self.team, teams = new Map(roster.map(p => [p.id, p.team])), teamOf = id => teams.get(String(id));
@@ -84,20 +90,22 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
   const deathMoment = d => ({tick: d.tick, label: d.attacker_steamid ? `Died to ${nm(d.attacker_steamid)}` : "Died", lead: o.deathLeadSeconds});
   // What the demo says about a death: callout, killer weapon, flashed, distance to the nearest teammate and
   // grenades still in hand. The cause picks the look-at text instead of one template for every death.
-  const deathContext = d => {
+  const deathContext = (d, traded = false) => {
     const f = frameBefore(round.frames, d.tick), meP = f?.players.find(p => p.id === me), facts = [], causes = [];
     if (meP?.place) facts.push(`you at ${meP.place}`);
     const kP = d.attacker_steamid ? f?.players.find(p => p.id === String(d.attacker_steamid)) : null;
     const kDist = kP && meP ? Math.hypot(kP.x - meP.x, kP.y - meP.y) : null;
     if (d.weapon) facts.push(`(${key(d.weapon)}${d.headshot ? ", headshot" : ""})`);
-    const blind = round.events.find(e => e.event_name === "player_blind" && String(e.user_steamid) === me && teamOf(e.attacker_steamid) !== team && e.tick <= d.tick && e.tick >= d.tick - 3 * rate && Number(e.blind_duration ?? 1) > 0.7);
+    // Flashed = an enemy flash whose blind lasts until at most 0.5 s before the death.
+    const blind = round.events.find(e => e.event_name === "player_blind" && String(e.user_steamid) === me && e.attacker_steamid && teamOf(e.attacker_steamid) !== undefined && teamOf(e.attacker_steamid) !== team
+      && e.tick <= d.tick && e.tick >= d.tick - 3 * rate && Number(e.blind_duration ?? 0) > 0.7 && e.tick + Number(e.blind_duration) * rate >= d.tick - 0.5 * rate);
     if (blind) causes.push("flashed");
     const mates = (f?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false && meP);
     const near = mates.length ? Math.min(...mates.map(p => Math.hypot(p.x - meP.x, p.y - meP.y))) : null;
     if (near !== null && near > o.aloneUnits) causes.push("alone");
     const nades = meP ? grenadeCount(meP) : 0, types = meP ? (meP.inventory ?? []).map(itemName).filter(n => GRENADES.test(key(n))).map(n => key(n).replace(/grenade$/, "")) : [];
     if (nades >= 2) causes.push("utility");
-    if (near !== null && near <= o.closeUnits) causes.push("close");
+    if (near !== null && near <= o.closeUnits && !traded) causes.push("close");
     const parts = facts.length ? [facts.join(" ")] : [];
     if (kP) parts.push(`killer ${kP.place ? `at ${kP.place}, ` : ""}${Math.round(kDist)} units (${Math.round(kDist * 0.0254)} m) away`);
     parts.push(blind ? `flashed (${Number(blind.blind_duration ?? 0).toFixed(1)} s, ${((d.tick - blind.tick) / rate).toFixed(1)} s before)` : "no enemy flash on you in the last 3 s");
@@ -110,17 +118,18 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
       : null;
     return {text: parts.length ? `: ${parts.join(", ")}` : "", look};
   };
-  const addDeath = (type, score, d, head, tail) => { const c = deathContext(d); add(type, score, [deathMoment(d)], `${head}${c.text}${tail}`); if (c.look) out.at(-1).look = c.look; out.at(-1).killer = nm(d.attacker_steamid); };
+  const addDeath = (type, score, d, head, tail, traded = false) => { const c = deathContext(d, traded); add(type, score, [deathMoment(d)], `${head}${c.text}${tail}`); if (c.look) out.at(-1).look = c.look; out.at(-1).killer = nm(d.attacker_steamid); };
 
+  // Your death is traded when a teammate kills your killer within tradeSeconds.
+  const myTraded = Boolean(myDeath && killer && deaths.some(x => String(x.user_steamid) === killer && x.tick > myDeath.tick && x.tick <= myDeath.tick + o.tradeSeconds * rate && teamOf(x.attacker_steamid) === team));
   // Opening duel.
   const first = deaths.find(d => d.attacker_steamid && teamOf(d.attacker_steamid) !== teamOf(d.user_steamid));
-  if (first && myDeath === first && killer) addDeath(decided && !won ? "opening-death-lost" : "opening-death", decided && !won ? 4 : 2, first, `Died first with ${at(first.tick)} left to ${nm(killer)}`, decided ? won ? "; the team still won." : "; the team lost the round." : ".");
+  if (first && myDeath === first && killer) addDeath(decided && !won ? "opening-death-lost" : "opening-death", decided && !won ? 4 : 2, first, `Died first with ${at(first.tick)} left to ${nm(killer)}`, decided ? won ? "; the team still won." : "; the team lost the round." : ".", myTraded);
   if (first && isEnemyKill(first, me)) add("opening-kill", won ? 3 : 2, killMoments([first]), `Opening kill on ${nm(first.user_steamid)} with ${at(first.tick)} left${decided ? won ? "; the round was won." : ", but the round was lost." : "."}`);
 
   // Death without a trade: the killer survives the next tradeSeconds against your team.
   if (myDeath && killer) {
-    const traded = deaths.some(x => String(x.user_steamid) === killer && x.tick > myDeath.tick && x.tick <= myDeath.tick + o.tradeSeconds * rate && teamOf(x.attacker_steamid) === team);
-    if (!traded) addDeath("untraded-death", decided && !won ? 3 : 2.5, myDeath, `Killed by ${nm(killer)} with ${at(myDeath.tick)} left`, `; not traded within ${o.tradeSeconds}s.`);
+    if (!myTraded) addDeath("untraded-death", decided && !won ? 3 : 2.5, myDeath, `Killed by ${nm(killer)} with ${at(myDeath.tick)} left`, `; not traded within ${o.tradeSeconds}s.`);
   }
 
   if (myKills.length >= 2) {
@@ -152,11 +161,13 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     const moments = [{tick: plant.tick, label: "Bomb planted"}, ...killMoments(kills), ...(died ? [deathMoment(died)] : []), ...(outcome ? [{tick: outcome.tick, label: outcome.event_name === "bomb_defused" ? "Bomb defused" : "Bomb exploded"}] : [])];
     const why = `Alive at the plant (${at(plant.tick)} left)${kills.length ? `, ${kills.length} kill${kills.length > 1 ? "s" : ""} after it` : ""}; ${outcome ? outcome.event_name === "bomb_defused" ? "bomb defused" : "bomb exploded" : won ? "round won" : "round lost"}.`;
     // Lost post-plant: say how it was lost for you (died and to whom, or alive while they defused).
-    const lostWhy = died ? `${why} You died after the plant to ${died.attacker_steamid ? nm(died.attacker_steamid) : "?"} with ${at(died.tick)} left${deathContext(died).text}.`
+    const enemyKill = died && died.attacker_steamid && teamOf(died.attacker_steamid) !== undefined && teamOf(died.attacker_steamid) !== team;
+    const lostWhy = enemyKill ? `${why} You died after the plant to ${nm(died.attacker_steamid)} with ${at(died.tick)} left${deathContext(died).text}.`
+      : died ? `${why} You died after the plant (not to an enemy kill) with ${at(died.tick)} left.`
       : `${why} You were alive when it was defused: check whether you could hear or contest the defuse.`;
     if (team !== 2) add(won ? "retake-won" : "retake-lost", won ? 3 + 0.5 * kills.length : 2, moments, why);
     else add(won ? "afterplant-won" : "afterplant-lost", won ? 2.5 + 0.5 * kills.length : 3, moments, won ? why : lostWhy);
-    if (team === 2 && !won && died) { const mates = (frameBefore(round.frames, died.tick)?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false), meP = frameBefore(round.frames, died.tick)?.players.find(p => p.id === me);
+    if (team === 2 && !won && enemyKill) { const mates = (frameBefore(round.frames, died.tick)?.players ?? []).filter(p => p.id !== me && teamOf(p.id) === team && p.alive !== false), meP = frameBefore(round.frames, died.tick)?.players.find(p => p.id === me);
       if (meP && mates.some(p => Math.hypot(p.x - meP.x, p.y - meP.y) <= o.closeUnits)) out.at(-1).look = "You and a teammate held the bomb from the same spot: one grenade or one swing can take both, so split into a crossfire with separate angles."; }
   }
 
@@ -217,7 +228,7 @@ export function instructiveRounds(replay, review, opts = {}) {
       round: index, roundNumber: round.number, score: r1(total), kind: bad >= 2 && good >= 2 ? "mixed" : bad >= good ? "mistake" : "highlight",
       category: primary.type, title: primary.title, confidence: primary.confidence, why: [primary.why, ...cats.slice(1).filter(c => (c.type in ENGINE || c.type === "wasted-utility") && !(c.type === "isolated" && DEATHS.has(primary.type))).slice(0, 2).map(c => `Also: ${c.why}`)].join(" "), lookAt: primary.look,
       side: self?.team === 2 ? "T" : "CT", buy: self ? teamBuy(replay, index, self.team) : null, won: winnerTeam(round.winner) !== null ? winnerTeam(round.winner) === self?.team : null,
-      startTick: round.live, endTick: round.end, keyTick, keySeconds: r2(keyTick / rate), keyClock: mmss(keyTick / rate), roundClock: clock(round, keyTick, rate),
+      startTick: round.live, endTick: round.end, keyTick, keySeconds: r2(keyTick / rate), keyClock: mmss(keyTick / rate), roundClock: roundClockAt(round, keyTick, rate),
       winChance: swing, categories: cats.map(c => ({type: c.type, kind: c.kind, score: r1(c.score), confidence: c.confidence, why: c.why})),
       windows, spectate: {steamId: me, name: playerName(replay, me), accountId: accountId(me)}
     });
@@ -256,7 +267,7 @@ export function clipWindows(moments, round, rate, {leadSeconds = INSTRUCTIVE_DEF
   return out.map(w => ({
     startTick: w.startTick, endTick: w.endTick, seconds: r2((w.endTick - w.startTick) / rate),
     startSeconds: r2(w.startTick / rate), endSeconds: r2(w.endTick / rate), startClock: mmss(w.startTick / rate), endClock: mmss(w.endTick / rate),
-    moments: w.moments.map(m => ({tick: m.tick, seconds: r2(m.tick / rate), clock: mmss(m.tick / rate), roundClock: clock(round, m.tick, rate), type: m.type, kind: m.kind, severity: m.severity, label: m.label, why: m.why, look: m.look}))
+    moments: w.moments.map(m => ({tick: m.tick, seconds: r2(m.tick / rate), clock: mmss(m.tick / rate), roundClock: roundClockAt(round, m.tick, rate), type: m.type, kind: m.kind, severity: m.severity, label: m.label, why: m.why, look: m.look}))
   }));
 }
 
