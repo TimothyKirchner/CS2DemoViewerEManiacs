@@ -1,44 +1,33 @@
 # HANDOFF
-_Updated 2026-11-05 (Claude, opponent heatmap hold spots, local build 1.3.0)_
+_Updated 2026-11-10 (Claude, coach review loop for both analysers)_
 
 ## Current task
-Opponent analyser on branch `feature/opponent-analyser`; PR #2 to main open:
-https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/pull/2. Nothing in progress.
+Coach-evaluate-improve loop on branch `feature/coach-loop` (pushed, 20+ small commits). Persona prompts in
+`scripts/coach-persona.md` (ESEA anti-strat coach; self-review coach). Every round's report and verdict are
+in Git-ignored `review-out/coach-rounds/opponent/rN/` and `review-out/coach-rounds/review/rN/`.
+PR to main still to open: https://github.com/TimothyKirchner/CS2DemoViewerEManiacs/compare/main...feature/coach-loop
+(gh CLI missing; the Claude browser pane was not signed in to GitHub on 10 Nov).
 
-## Done (2026-11-05)
-- Positions radar (Analyse opponent tab) defaults to "Hold spots": `positionHeatmap(..., {mode:'holds'})` in
-  `web/opponent-positions.mjs`. Per player and round it finds dwells: time spent inside a 240x240-unit box
-  (jiggles count; out of the box > 1 s starts a new dwell), >= 2 s, not at the player's freeze-end spawn spot; clusters dwells across rounds (220 units, 120 z for floors), and keeps
-  spots seen in 2+ rounds with >= 10 % team share or >= 25 % of one player's own rounds (per-player idea from
-  FACEIT Mappio, whose method is not public). Each spot: callout, team share, main holder + share of his rounds.
-- UI: numbered dots coloured by main player (grey = stand-in), table # / callout / team rounds / main player /
-  others; "Show" select keeps "All movement" (no 15 % opacity floor now).
-- Real check (Downloads/demos/28_10): CT 0-20 s ancient 17 spots (A 78 %, B 52 %), anubis 18 (Middle 73 %);
-  later windows 23-42 spots (noisier: retakes, rotations).
-- "Where is the AWP": Players filter "AWP (whoever has it)" (`AWP_PLAYER`) runs the same hold spots on whoever
-  on the target side holds or carries an AWP; share = % of AWP rounds, holders = who AWPs there. Real check:
-  ancient CT 0-20 s AWP on A 57 % (one player 80 %), anubis Middle 75 %.
-- Version 1.3.0 (package.json, lock, README.txt). Local portable build: release/ and parent folder
-  `Strat-Scope-1.3.0-Windows-x64.exe`; verify-package passed (80 files), manifest regenerated. Not published.
-  Build needs node on PATH (npm.cmd calls node): prepend the Codex node bin dir before build-local.cjs.
-- Tests 131/131; session smoke passes (select count 6 -> 7 fixed; it broke in 24db5fc).
-
-## Done earlier (task 5)
-- Anti-strat report, veto suggestion, side habits, economy/stand-in notes, report script; see git log.
+## Coach trajectory
+- Opponent analyser (4 demos of one opponent, Downloads/demos/28_10): r1 5.5, r2 6.8, r3 7.3, r4 7.8,
+  r5 8.0 satisfied. Fixed: mid callouts (Middle, Outside, Canal, spawns, T-side routes) never count as a
+  site; "fixed timing" only for <= 4 s windows in 5+ rounds; no raw coordinates; opening duels need a
+  15-point edge; trades compared with their opponents' rate (10 points); no counter text below 8 rounds;
+  wording follows the numbers; per-map top reads; T starts per player; plant split with even-split
+  handling; side-aware utility counters; "Site left empty at the plant"; veto flags single-demo maps.
+- Review engine (Frank's anubis demo 357f8183): r1 5.8, r2 7.0, r3 7.8, r4 8.0 satisfied, r5 confirmation
+  after a fix (see verdict file). Fixed: death causes (you/killer callout, distance in units and metres,
+  flash evidence, teammate distance, unused grenade types, cause-specific look-at), 12 s death lead, max 4
+  death picks and max half highlights, buy type, bomb timer after the plant, win-chance swing (model
+  estimate), rating and benchmark definitions, cross-round patterns, post-plant causes.
+- A regression (won T post-plants labelled as retakes) slipped into one commit and was fixed with a test.
 
 ## Next steps
-- Frank: try the 1.3.0 exe (hold-spot radar, AWP filter), then merge PR #2. GitHub release needs his approval.
+- Open the PR and merge when tests pass (Frank approved merging). Rerun `tests/session-smoke.cjs` in Electron.
+- Remaining coach asks (not blocking): ancient T utility and hit-site by buy type, pistol setups, evidence on
+  plant-split/economy rows, decisions/scope component breakdown, picks sorted by win-chance swing.
 
 ## Open issues
-- Hold thresholds (240 box, 1 s peek, 2 s, 220 units, 10 % / 25 %) are heuristics; tune after Frank's visual review.
-- Zones: 1400-unit site radius puts some mid callouts (anubis Middle, ancient Outside) into a site zone.
-- Veto uses only opponent results; 1 anubis demo. Timeout caller not in parsed data.
-- Recorder blocked (CS2 exits while loading demos). Public release remains UNAPPROVED.
-- Node is not on PATH: use C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe
+- Tests 140/140 with the bundled node: C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe
+- `scripts/opponent-report.mjs --cache review-out/cache` reruns in ~3 s (cache 337 MB, Git-ignored).
 - Never commit demos, review-out/ or SteamIDs/names (public repo).
-
-## Auto notes (claude session 9ba40a86, 2026-11-09T07:21)
-<!-- auto: written by local LLM from transcript tail; verify before trusting -->
-- '- `C:\\Users\\timot\\Desktop\\CS2DemoviewerEManiacs\\Strat-Scope-1.3.0-Windows-x64.exe` built'
-- '- Last commit: `790a4bc`'
-- '- Merge blocked by "Merge Without Review"'
