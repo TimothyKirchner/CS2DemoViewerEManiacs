@@ -13,7 +13,9 @@ heatmaps, utility trajectories), scope.gg (opening duels, positions by round tim
 a short list of their defaults, setups by buy type, their utility timings, who opens where, what they do after
 losing pistol, and how to verify each claim in a replay quickly.
 
-Review the opponent analyser of Strat Scope, a local Electron demo viewer. Inputs:
+Review the opponent analyser of Strat Scope, a local Electron demo viewer, as an ESEA anti-strat tool: 5v5
+team prep against a known ESEA opponent (map veto, their setups, defaults and habits), built from their past
+ESEA league and FACEIT demos. Inputs:
 - the generated report (Markdown, HTML) for real demos of one opponent,
 - the UI module and report code (read only the parts you need),
 - the previous round's verdict, if any, to check what was fixed.

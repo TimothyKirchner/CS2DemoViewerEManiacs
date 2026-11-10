@@ -66,8 +66,8 @@ test('stand-in notes and economy notes carry sample sizes',()=>{
   assert.ok(notes.some(n=>n==='Name s1: stand-in, 1 of 3 demos. Not named in player habits; counts only in team totals.'));
   assert.ok(notes.some(n=>n.startsWith('1 of 2 demos on de_test had a stand-in')));
   assert.deepEqual(standInNotes(d,'de_two'),[]);
-  const e=economyNotes({rows:[{label:'After a lost T pistol',count:4,force:2,half:1,eco:1,full:0},{label:'Empty',count:0}]});
-  assert.equal(e.length,1);assert.equal(e[0].sample,'3 of 4 rounds');assert.match(e[0].counter,/Expect a force/);
+  const e=economyNotes({rows:[{label:'After a lost T pistol',count:5,force:3,half:1,eco:1,full:0},{label:'Empty',count:0}]});
+  assert.equal(e.length,1);assert.equal(e[0].sample,'4 of 5 rounds');assert.match(e[0].counter,/Expect a force/);
   const n=economyNotes({rows:[{label:'After a won pistol',count:6,force:0,half:0,next:[{type:'eco',label:'Eco',count:1},{type:'full',label:'Full buy',count:5}]}]});
   assert.equal(n[0].text,'After a won pistol: next round mostly full buy');assert.equal(n[0].sample,'5 of 6 rounds');assert.match(n[0].counter,/full buy/);
 });
@@ -75,7 +75,7 @@ test('stand-in notes and economy notes carry sample sizes',()=>{
 test('markdown and HTML exports; prepReport embeds the page as a section',()=>{
   const {entries,d}=setup(),report=antiStratReport(entries,d,{mapDefs,pool:['de_test','de_two'],title:'Beat <them>'});
   const md=renderAntiStrat(report,'markdown');
-  for(const s of ['# Beat <them>','## de_test: how to beat them','### Their CT side (10 rounds)','Counter (heuristic)','Ban de_test','Pick de_two','Evidence: R1 · de_test.dem (tick','Name s1: stand-in, 1 of 3 demos'])assert.ok(md.includes(s),s);
+  for(const s of ['# Beat <them>','## de_test: how to beat them','### Their CT side (10 rounds, top reads not repeated)','Counter (heuristic)','Ban de_test','Pick de_two','Evidence: R1 · de_test.dem (tick','Name s1: stand-in, 1 of 3 demos'])assert.ok(md.includes(s),s);
   assert.ok(md.includes('small sample'));// de_two has 6 rounds
   const html=renderAntiStrat(report,'html');
   assert.match(html,/^<!doctype html>/);assert.ok(html.includes('Beat &lt;them&gt;'));assert.ok(html.includes('Lead&lt;b&gt;'));assert.ok(!html.includes('Lead<b>'));assert.ok(!html.includes('data-play'));
@@ -96,7 +96,8 @@ test('utility timing is "fixed" only for tight windows, unknown callouts are dro
   assert.equal(u.length,2,'cluster without a callout is dropped');
   assert.ok(u.find(x=>x.text.includes('Middle')).text.includes('timing varies'));
   assert.ok(!u.find(x=>x.text.includes('Middle')).counter.includes('fixed time'));
-  assert.ok(u.find(x=>x.text.includes('Ramp')).counter.includes('fixed time'));
+  assert.ok(u.find(x=>x.text.includes('Ramp')).counter.includes('lands by 8 s'),'CT utility counter is side-aware');
+  assert.equal(sideHabits(3,{tend:{rounds:4,utility:{types:{smoke:cl('Ramp',7,8,4)}}}})[0].counter,'','no counter below 5 rounds');
   assert.ok(!h.some(x=>x.kind==='openings'),'50 % openings are no habit');
   assert.ok(sideHabits(3,{tend:tend(null,null,null,9,12)}).some(x=>x.kind==='openings'),'75 % openings are a habit');
   assert.ok(!JSON.stringify(h).includes('x 1'),'no raw coordinates');

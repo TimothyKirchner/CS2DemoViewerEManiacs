@@ -43,7 +43,7 @@ export function filterRounds(refs,{map,side,buyType,score}={},{buyRounds=[],scor
 // Callouts that are never part of a site, whatever their distance to a site anchor (the 1400-unit anchor
 // radius otherwise pulls e.g. anubis Middle or ancient Outside into a site).
 export const MID_CALLOUTS=Object.freeze({'*':['Middle','TopofMid','MidDoors','Mid','TSpawn','CTSpawn','TStairs'],
-  de_ancient:['Outside'],de_anubis:['Canal','Street','CTSideUpper'],de_mirage:['Connector','Window','Underpass','Jungle'],
+  de_ancient:['Outside','TSideLower','TSideUpper'],de_anubis:['Canal','Street','CTSideUpper','TSideUpper'],de_mirage:['Connector','Window','Underpass','Jungle'],
   de_inferno:['Mid','SecondMid','Arch'],de_dust2:['MidDoors','Xbox','Catwalk','LowerTunnel'],de_nuke:['Lobby','Mini','Silo','Hut'],de_overpass:['Fountain','Connector','Underpass']});
 const midSet=new Map();
 const isMidCallout=(mapDef,place)=>{const name=String(mapDef?.map??mapDef?.name??'').toLowerCase(),key=name.startsWith('de_')?name:`de_${name}`;
