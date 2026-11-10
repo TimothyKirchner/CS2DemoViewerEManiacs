@@ -215,7 +215,7 @@ export function instructiveRounds(replay, review, opts = {}) {
     const swing = pre && post && post.tick >= keyTick && !(primary.kind === "highlight" && mine(post) >= 0.99) ? {before: mine(pre), after: mine(post)} : null;
     candidates.push({
       round: index, roundNumber: round.number, score: r1(total), kind: bad >= 2 && good >= 2 ? "mixed" : bad >= good ? "mistake" : "highlight",
-      category: primary.type, title: primary.title, confidence: primary.confidence, why: [primary.why, ...cats.slice(1).filter(c => c.type in ENGINE || c.type === "wasted-utility").slice(0, 2).map(c => `Also: ${c.why}`)].join(" "), lookAt: primary.look,
+      category: primary.type, title: primary.title, confidence: primary.confidence, why: [primary.why, ...cats.slice(1).filter(c => (c.type in ENGINE || c.type === "wasted-utility") && !(c.type === "isolated" && DEATHS.has(primary.type))).slice(0, 2).map(c => `Also: ${c.why}`)].join(" "), lookAt: primary.look,
       side: self?.team === 2 ? "T" : "CT", buy: self ? teamBuy(replay, index, self.team) : null, won: winnerTeam(round.winner) !== null ? winnerTeam(round.winner) === self?.team : null,
       startTick: round.live, endTick: round.end, keyTick, keySeconds: r2(keyTick / rate), keyClock: mmss(keyTick / rate), roundClock: clock(round, keyTick, rate),
       winChance: swing, categories: cats.map(c => ({type: c.type, kind: c.kind, score: r1(c.score), confidence: c.confidence, why: c.why})),
@@ -236,6 +236,9 @@ export function choose(candidates, {max = INSTRUCTIVE_DEFAULTS.max, minEach = IN
   const others = sorted.filter(c => !DEATHS.has(c.category)).length, allowed = Math.max(maxDeaths, max - others);
   let deaths = 0; const ranked = sorted.filter(c => !DEATHS.has(c.category) || ++deaths <= allowed);
   for (const kind of ["mistake", "highlight"]) ranked.filter(c => c.kind === kind || c.kind === "mixed").filter(c => !picked.has(c)).slice(0, Math.min(minEach, Math.floor(max / 2))).forEach(c => picked.add(c));
+  // Highlights fill at most half the list while mistakes are left, so lessons are not crowded out.
+  const maxHighlights = Math.ceil(max / 2), highlights = () => [...picked].filter(c => c.kind === "highlight").length;
+  for (const c of ranked) { if (picked.size >= max) break; if (c.kind === "highlight" && highlights() >= maxHighlights && ranked.some(x => x.kind !== "highlight" && !picked.has(x))) continue; picked.add(c); }
   for (const c of ranked) { if (picked.size >= max) break; picked.add(c); }
   return ranked.filter(c => picked.has(c));
 }
@@ -275,7 +278,7 @@ export function instructiveMarkdown(result, {demo = "", plan = ""} = {}) {
     `Demo: ${demo || "?"} · ${result.rounds} rounds · ${result.tickRate} ticks/s · ${result.picks.length} picks from ${result.candidates} candidate rounds.`,
     `Clip window: ${result.settings.leadSeconds} s before (${result.settings.deathLeadSeconds ?? result.settings.leadSeconds} s before your deaths) and ${result.settings.tailSeconds} s after each key moment, merged on overlap. Demo time and clip windows are time since the demo start; "left" times in the text are the round clock (round time left; after the plant the bomb timer, marked (bomb)). Spectate: ${result.player.name}.`,
     "Confidence: high = from game events, medium = from sampled positions/inventories, low = judgement call.", "",
-    ...(result.patterns ? [`Patterns over ${result.patterns.rounds} rounds: ${result.patterns.deaths} rounds where you died first or untraded (${result.patterns.untraded} not traded within ${result.settings.tradeSeconds}s, ${result.patterns.openingDeaths} first deaths of the round). Killers in those rounds: ${Object.entries(result.patterns.byKiller).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}.`, ""] : []),
+    ...(result.patterns ? [`Patterns: you died untraded (no trade within ${result.settings.tradeSeconds}s) in ${result.patterns.untraded} of ${result.patterns.rounds} rounds and died first in ${result.patterns.openingDeaths}; ${result.patterns.deaths} rounds have either. Killers in those rounds: ${Object.entries(result.patterns.byKiller).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}.`, ""] : []),
     "| # | Round | Type | Category | Conf. | Demo time | Clip window | Why / what to look at |", "|---|---|---|---|---|---|---|---|"
   ];
   for (const p of result.picks) {

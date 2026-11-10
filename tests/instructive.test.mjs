@@ -174,5 +174,11 @@ test('death text names the killer position and the report lists cross-round patt
   const p=res.picks.find(x=>x.roundNumber===1);
   assert.match(p.why,/killer \d+ units \(\d+ m\) away/);assert.match(p.why,/no enemy flash on you in the last 3 s/);
   assert.equal(res.patterns.rounds,5);assert.ok(res.patterns.untraded>=2);assert.equal(res.patterns.byKiller.P6,1);
-  assert.match(instructiveMarkdown(res),/Patterns over 5 rounds/);
+  assert.match(instructiveMarkdown(res),/Patterns: you died untraded .* of 5 rounds/);
+});
+
+test('highlights fill at most half the picks while mistakes remain',()=>{
+  const c=(n,kind,score)=>({roundNumber:n,category:kind==='highlight'?'multikill':'afterplant-lost',score,kind});
+  const picks=choose([...[1,2,3,4,5,6].map(n=>c(n,'highlight',9)),c(7,'mistake',1),c(8,'mistake',1)],{max:6,minEach:1});
+  assert.equal(picks.filter(p=>p.kind==='highlight').length,4);assert.equal(picks.filter(p=>p.kind==='mistake').length,2);
 });
