@@ -49,7 +49,7 @@ const placeOf=(round,tick,id,mapDef,fallback)=>{const p=frameAt(round,tick)?.pla
 // Opening duels and trades for one map and side.
 export function duelTendencies(entries,detection,refs,{mapDefs={},tradeSeconds=TRADE_SECONDS}={}){
   const c=context(entries,detection),openings=[],places=new Map(),players=new Map(),pairs=new Map();
-  let ownDeaths=0,traded=0,openingDeaths=0,openingTraded=0;const tradeTimes=[];
+  let ownDeaths=0,traded=0,openingDeaths=0,openingTraded=0,enemyDeaths=0,enemyTraded=0;const tradeTimes=[],untraded=[];
   for(const ref of refs){const x=c.get(ref);if(!x)continue;const {round,rate,entry}=x,def=mapDefs[ref.map],kills=enemyKills(round);
     const won=round.incomplete||round.winner==null?null:Number(round.winner)===ref.side;
     const first=kills[0];
@@ -60,9 +60,12 @@ export function duelTendencies(entries,detection,refs,{mapDefs={},tradeSeconds=T
       if(o.core){if(!players.has(id))players.set(id,{id,name:c.who(id),attempts:0,wins:0,places:[]});const p=players.get(id);p.attempts++;if(ownWon)p.wins++;p.places.push(spot.place);}
     }
     // Trades: an own death is traded when a teammate kills the killer within the window.
-    kills.forEach((k,i)=>{if(k.victimSide!==ref.side)return;ownDeaths++;if(i===0)openingDeaths++;
+    // Baseline: the same rule for their opponents in the same rounds.
+    kills.forEach((k,i)=>{if(k.victimSide!==ref.side){
+        if(kills.slice(i+1).some(n=>n.victim===k.attacker&&n.attackerSide!==ref.side&&n.tick-k.tick<=tradeSeconds*rate))enemyTraded++;enemyDeaths++;return;}
+      ownDeaths++;if(i===0)openingDeaths++;
       const t=kills.slice(i+1).find(n=>n.victim===k.attacker&&n.attackerSide===ref.side&&n.tick-k.tick<=tradeSeconds*rate);
-      if(!t)return;traded++;if(i===0)openingTraded++;tradeTimes.push((t.tick-k.tick)/rate);
+      if(!t){if(untraded.length<10)untraded.push({...ref,number:round.number,source:entry.replay.source||ref.entryId,tick:k.tick});return;}traded++;if(i===0)openingTraded++;tradeTimes.push((t.tick-k.tick)/rate);
       const pair=`${c.who(t.attacker)} for ${c.who(k.victim)}`;pairs.set(pair,(pairs.get(pair)??0)+1);});
   }
   const n=openings.length,wins=openings.filter(o=>o.ownWon).length,decided=o=>o.won!==null;
@@ -72,7 +75,7 @@ export function duelTendencies(entries,detection,refs,{mapDefs={},tradeSeconds=T
       standIn:openings.filter(o=>!o.core).length,afterWin:{...aw,winRate:share(aw.wins,aw.count)},afterLoss:{...al,winRate:share(al.wins,al.count)}},
     places:[...places.values()].sort((a,b)=>b.count-a.count||a.place.localeCompare(b.place)).map(p=>({...p,winRate:share(p.wins,p.count),sample:sample(p.count,n,'openings')})),
     players:[...players.values()].sort((a,b)=>b.attempts-a.attempts||a.name.localeCompare(b.name)).map(p=>({...p,winRate:share(p.wins,p.attempts),sample:sample(p.attempts,n,'openings'),places:tally(p.places).slice(0,3)})),
-    trades:{deaths:ownDeaths,traded,share:share(traded,ownDeaths),sample:sample(traded,ownDeaths,'deaths'),openingDeaths,openingTraded,openingShare:share(openingTraded,openingDeaths),
+    trades:{deaths:ownDeaths,traded,share:share(traded,ownDeaths),baseline:{deaths:enemyDeaths,traded:enemyTraded,share:share(enemyTraded,enemyDeaths)},evidence:untraded,sample:sample(traded,ownDeaths,'deaths'),openingDeaths,openingTraded,openingShare:share(openingTraded,openingDeaths),
       medianSeconds:median(tradeTimes),seconds:tradeSeconds,pairs:[...pairs].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([label,count])=>({label,count}))}};
 }
 
@@ -177,7 +180,7 @@ export function tendencyAnalysis(entries,detection,refs,{mapDefs={},buyRounds=[]
     warnings:[
       `Team-level rows use every matched round, stand-ins included. Player rows are core players only; stand-in openings, trades and clutches count only in team totals.`,
       `Opening duel = first kill between the teams after freeze end; place = the target-team player's callout at that moment. A death is traded when a teammate kills the killer within ${TRADE_SECONDS} s.`,
-      `Heuristic: stack = at least ${STACK_PLAYERS[3]} CTs (${STACK_PLAYERS[2]} Ts) on one bombsite at ${SETUP_SECONDS[3]} s (CT) / ${SETUP_SECONDS[2]} s (T). Retake = no living CT on the plant site when the bomb is planted.`,
+      `Heuristic: stack = at least ${STACK_PLAYERS[3]} CTs (${STACK_PLAYERS[2]} Ts) on one bombsite at ${SETUP_SECONDS[3]} s (CT) / ${SETUP_SECONDS[2]} s (T). Site left empty = no living CT on the plant site when the bomb is planted.`,
       `Heuristic: utility clusters group landings within ${CLUSTER_RADIUS.smoke} units (smokes, mollies), ${CLUSTER_RADIUS.flash} (flashes) and ${CLUSTER_RADIUS.he} (HE); times are seconds after freeze end (median, 25-75 % range). Callout = nearest player callout within 600 units.`,
       'Heuristic: economy uses the buy types of the round library; "force %" counts force and half buys in the next round of the same half. Save = lost round with at least one player alive at the end.',
       `Heuristic: timeout = freeze time at least ${TIMEOUT_EXTRA_SECONDS} s longer than the demo's median (pauses look the same). The caller is not recorded: the team on a losing streak of 2+ is the likely caller.`,

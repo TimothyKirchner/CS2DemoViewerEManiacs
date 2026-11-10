@@ -66,10 +66,10 @@ test('stand-in notes and economy notes carry sample sizes',()=>{
   assert.ok(notes.some(n=>n==='Name s1: stand-in, 1 of 3 demos. Not named in player habits; counts only in team totals.'));
   assert.ok(notes.some(n=>n.startsWith('1 of 2 demos on de_test had a stand-in')));
   assert.deepEqual(standInNotes(d,'de_two'),[]);
-  const e=economyNotes({rows:[{label:'After a lost T pistol',count:5,force:3,half:1,eco:1,full:0},{label:'Empty',count:0}]});
-  assert.equal(e.length,1);assert.equal(e[0].sample,'4 of 5 rounds');assert.match(e[0].counter,/Expect a force/);
-  const n=economyNotes({rows:[{label:'After a won pistol',count:6,force:0,half:0,next:[{type:'eco',label:'Eco',count:1},{type:'full',label:'Full buy',count:5}]}]});
-  assert.equal(n[0].text,'After a won pistol: next round mostly full buy');assert.equal(n[0].sample,'5 of 6 rounds');assert.match(n[0].counter,/full buy/);
+  const e=economyNotes({rows:[{label:'After a lost T pistol',count:8,force:5,half:1,eco:2,full:0},{label:'Empty',count:0}]});
+  assert.equal(e.length,1);assert.equal(e[0].sample,'6 of 8 rounds');assert.match(e[0].counter,/Expect a force/);
+  const n=economyNotes({rows:[{label:'After a won pistol',count:8,force:0,half:0,next:[{type:'eco',label:'Eco',count:1},{type:'full',label:'Full buy',count:7}]}]});
+  assert.equal(n[0].text,'After a won pistol: next round mostly full buy');assert.equal(n[0].sample,'7 of 8 rounds');assert.match(n[0].counter,/full buy/);
 });
 
 test('markdown and HTML exports; prepReport embeds the page as a section',()=>{

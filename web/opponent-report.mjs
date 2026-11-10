@@ -10,8 +10,8 @@ import {escapeHtml as esc} from './scouting.mjs';
 // Editable default pool (CS2 Active Duty as assumed for late 2026). Maps outside the pool still get pages.
 export const DEFAULT_POOL=Object.freeze(['de_ancient','de_anubis','de_dust2','de_inferno','de_mirage','de_nuke','de_overpass']);
 // A habit is reported when it holds in at least `share` of at least `minRounds` rounds.
-export const HABIT_LIMITS=Object.freeze({minRounds:4,anchorShare:.6,setupShare:.4,stackShare:.3,utilityShare:.5,awpShare:.5,placeOpenings:5,lowTrade:.35,forceShare:.5,minClutches:4,minCounter:5,retakeHigh:.45,retakeLow:.2,tUtilityShare:.35,duelEdge:.15,tightTiming:4,minTimingRounds:5});
-const SMALL=10,MIN_COUNTER=5;
+export const HABIT_LIMITS=Object.freeze({minRounds:4,anchorShare:.6,tAnchorShare:.45,tradeEdge:.1,setupShare:.4,stackShare:.3,utilityShare:.5,awpShare:.5,placeOpenings:5,lowTrade:.35,forceShare:.5,minClutches:4,minCounter:5,retakeHigh:.45,retakeLow:.2,tUtilityShare:.35,duelEdge:.15,tightTiming:4,minTimingRounds:5});
+const SMALL=10,MIN_COUNTER=8;
 const pct=v=>`${Math.round(v*100)}%`;
 const sideName=s=>s===2?'T':'CT';
 const of=(n,total,unit='rounds')=>`${n} of ${total} ${unit}`;
@@ -55,7 +55,7 @@ const habit=(kind,text,count,total,counter,evidence,extra={})=>({kind,text,count
 
 // Top reads of one map: the strongest non-small habits on both sides, weighted by share and sample size.
 export function topReads(sides,n=3){
-  const all=sides.flatMap(s=>s.habits.filter(h=>!h.small).map(h=>({...h,side:s.side})));
+  const all=sides.flatMap(s=>s.habits.filter(h=>!h.small&&!['starts','plants'].includes(h.kind)).map(h=>({...h,side:s.side})));
   return all.sort((a,b)=>b.share*Math.sqrt(b.total)-a.share*Math.sqrt(a.total)).slice(0,n).map(({side,...h})=>({...h,side,ref:sides.find(s=>s.side===side).habits.find(x=>x.text===h.text)}));
 }
 
@@ -64,15 +64,19 @@ export function topReads(sides,n=3){
 export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   const out=[],L={...HABIT_LIMITS,...limits},rounds=tend?.rounds??pos?.rounds??0;
   if(rounds<L.minRounds)return out;
-  for(const p of pos?.players??[])if(p.rounds>=L.minRounds&&p.count/p.rounds>=L.anchorShare)
+  for(const p of pos?.players??[])if(p.rounds>=L.minRounds&&p.count/p.rounds>=(side===2?L.tAnchorShare:L.anchorShare))
     out.push(habit('position',`${p.place} (${p.zone}) ${side===3?'anchored':'taken'} by ${p.name}`,p.count,p.rounds,
-      side===3?`Expect ${p.name} on ${p.place}; pre-plan flashes or a utility clear for that spot.`:`Expect ${p.name} on ${p.place}; hold an angle on it early.`,p.evidence,{player:p.name}));
+      side===3?`Expect ${p.name} on ${p.place}; pre-plan flashes or a utility clear for that spot.`:`Expect ${p.name} on ${p.place} at 20 s; hold an angle on it early.`,p.evidence,{player:p.name}));
   const setup=pos?.setups?.[0];
-  const at=side===3?'15 s':'20 s';
-  if(setup&&pos.rounds>=L.minRounds&&setup.share>=L.setupShare)out.push(habit('setup',`Default ${side===3?'CT setup':'T spread'} (living players at ${at}): ${setup.label}`,setup.count,pos.rounds,
+  const at=side===3?'15 s':'20 s',aliveNote=g=>{const n=Object.values(g?.zones??{}).reduce((a,b)=>a+b,0);return n&&n<5?`, ${n} alive (one died before ${at})`:'';};
+  if(setup&&pos.rounds>=L.minRounds&&setup.share>=L.setupShare)out.push(habit('setup',`Default ${side===3?'CT setup':'T spread'} (living players at ${at}): ${setup.label}${aliveNote(setup)}`,setup.count,pos.rounds,
     side===3?`Hit the site with the fewest players in this setup (${setup.label}).`:'Their spread at 20 s is predictable; plan a mid-round rotate against it.',setup.evidence));
   // T side without a dominant spread still gets its most common one, so the IGL sees the structure.
-  else if(side===2&&setup&&pos.rounds>=SMALL)out.push(habit('setup',`Most common T spread (living players at ${at}): ${setup.label}; no single default`,setup.count,pos.rounds,
+  // T starts per core player at 20 s (by callout, since mid lanes all count as "mid" in the spread).
+  if(side===2&&pos.rounds>=SMALL){const seen=new Set(),starts=(pos.players??[]).filter(p=>p.rounds>=L.minRounds&&!seen.has(p.name)&&seen.add(p.name)).slice(0,5);
+    if(starts.length)out.push(habit('starts',`T starts at 20 s: ${starts.map(p=>`${p.name} ${p.place} ${pct(p.count/p.rounds)}`).join(', ')}`,starts.reduce((a,p)=>a+p.count,0),starts.reduce((a,p)=>a+p.rounds,0),
+      'Use these as the first spots to check with utility or info; a share under 50 % is a lean, not a default.',starts.flatMap(p=>p.evidence??[]).slice(0,5),{unit:'player rounds'}));}
+  if(side===2&&setup&&pos.rounds>=SMALL&&setup.share<L.setupShare&&!(setup.zones?.mid>=4))out.push(habit('setup',`Most common T spread (living players at ${at}): ${setup.label}; no single default`,setup.count,pos.rounds,
     'They vary their spread: read their utility and first contact instead of a fixed default.',setup.evidence));
   const awp=pos?.awp?.spots?.[0];
   if(awp&&pos.awp.rounds>=L.minRounds&&awp.share>=L.awpShare)out.push(habit('awp',`AWP on ${awp.place} (${awp.zone})${awp.holders[0]&&!awp.holders[0].label.startsWith('stand-in')?`, usually ${awp.holders[0].label}`:''}`,awp.count,pos.awp.rounds,
@@ -92,8 +96,11 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   for(const p of (tend?.duels?.places??[]).filter(p=>p.count>=L.placeOpenings&&(p.wins/p.count>=.7||p.wins/p.count<=.3)).slice(0,3))out.push(habit('opening-place',`Opening duels at ${p.place} (${p.zone}) won`,p.wins,p.count,
     p.wins/p.count>=.7?`Do not dry-peek ${p.place}; use utility or a second angle.`:`Challenge ${p.place} early: they lose that duel more often than not.`,p.evidence,{unit:'openings there'}));
   const tr=tend?.duels?.trades;
-  if(tr&&tr.deaths>=L.minRounds*2&&tr.share<=L.lowTrade)out.push(habit('trades',`Deaths traded within ${tr.seconds} s`,tr.traded,tr.deaths,
-    'They trade rarely: isolate players and take 1v1 fights.',[],{unit:'deaths'}));
+  // Trades against a baseline: their opponents' trade rate in the same rounds; 10+ points apart is a habit.
+  const base=tr?.baseline;
+  if(tr&&tr.deaths>=L.minRounds*2&&base?.deaths>=L.minRounds*2&&Math.abs(tr.share-base.share)>=L.tradeEdge){const low=tr.share<base.share;
+    out.push(habit('trades',`Deaths traded within ${tr.seconds} s (their opponents: ${pct(base.share)} of ${base.deaths})`,tr.traded,tr.deaths,
+      low?'They trade less than their opponents: isolate players and take 1v1 fights.':'They trade more than their opponents: do not take fights you cannot trade back.',tr.evidence,{unit:'deaths'}));}
   for(const [type,label] of [['smoke','Smoke'],['fire','Molly'],['flash','Flash']]){
     const c=tend?.utility?.types?.[type]?.clusters?.[0];
     // Clusters without a nearby callout are dropped: raw coordinates are not usable before a match.
@@ -116,16 +123,16 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
     out.push(habit('route',`Full buys plant ${site}`,plant.count,full.count,`On their full buys, play one extra player toward ${site}.`,[],{unit:'full-buy rounds'}));}
   const cl=(tend?.players?.players??[]).filter(p=>p.clutchAttempts>=L.minClutches).sort((a,b)=>b.clutchWins-a.clutchWins)[0];
   if(cl&&cl.clutchWins/cl.clutchAttempts>=.5)out.push(habit('clutch',`${cl.name} clutches`,cl.clutchWins,cl.clutchAttempts,
-    `Do not play slow against ${cl.name} late in rounds; check corners in pairs.`,[],{unit:'clutches',player:cl.name}));
+    '',[],{unit:'clutches',player:cl.name}));
   return out.sort((a,b)=>Number(a.small)-Number(b.small)||b.share-a.share);
 }
 
 // Economy habits (team level, all maps): force after a lost pistol and after a lost buy round.
 export function economyNotes(economy,limits=HABIT_LIMITS){
   const counter={eco:'Expect an eco: play anti-eco, keep distance and do not give away rifles.',force:'Expect a force: play at range and avoid giving them easy rifle kills.',
-    half:'Expect a half buy: play at range and avoid giving them easy rifle kills.',full:'Expect a full buy: bring your full utility.','anti-eco':'Expect a full buy: bring your full utility.'};
+    half:'Expect a half buy: play at range and avoid giving them easy rifle kills.',full:'Expect a full buy: bring your full utility.','anti-eco':'They full buy into your eco: save or play for exit kills.'};
   return (economy?.rows??[]).filter(r=>r.count>0).map(r=>{const next=[...(r.next??[])].sort((a,b)=>b.count-a.count)[0],force=(r.force??0)+(r.half??0);
-    return next?habit('economy',`${r.label}: next round mostly ${next.label.toLowerCase()}`,next.count,r.count,counter[next.type]??'Check the rounds before planning around it.',[],{unit:'rounds',force})
+    return next?habit('economy',`${r.label}: next round mostly ${next.label.toLowerCase()}${next.type==='anti-eco'?' (full buy against your eco)':''}`,next.count,r.count,counter[next.type]??'Check the rounds before planning around it.',[],{unit:'rounds',force})
       :habit('economy',`${r.label}: force or half buy next`,force,r.count,force/r.count>=limits.forceShare?counter.force:counter.eco,[],{unit:'rounds'});});
 }
 
