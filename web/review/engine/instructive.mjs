@@ -92,7 +92,7 @@ export function roundCategories(replay, index, me, opts = {}, findings = []) {
     const near = mates.length ? Math.min(...mates.map(p => Math.hypot(p.x - meP.x, p.y - meP.y))) : null;
     if (near !== null && near > o.aloneUnits) causes.push("alone");
     const nades = meP ? grenadeCount(meP) : 0; if (nades >= 2) causes.push("utility");
-    const parts = [...facts];
+    const parts = facts.length ? [facts.join(" ")] : [];
     if (blind) parts.push("while flashed");
     if (near !== null) parts.push(`nearest teammate ${Math.round(near)} units away`);
     if (nades) parts.push(`${nades} grenade${nades > 1 ? "s" : ""} unused`);
