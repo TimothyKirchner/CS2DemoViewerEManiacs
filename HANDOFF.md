@@ -21,6 +21,9 @@ PR to main still to open: https://github.com/TimothyKirchner/CS2DemoViewerEMania
   death picks and max half highlights, buy type, bomb timer after the plant, win-chance swing (model
   estimate), rating and benchmark definitions, cross-round patterns, post-plant causes.
 - A regression (won T post-plants labelled as retakes) slipped into one commit and was fixed with a test.
+- Final Fable 5.2 code review (10 Nov): no blockers; 9 of 10 findings fixed (teamBuy pistols/early buy,
+  traded-death look-at, flash expiry, enemy-kill check, empty counters, top-read ranking, alive note, own-kill
+  flash note, bomb roundClock), *.v8 ignored. Not fixed: nothing open from that review.
 
 ## Next steps
 - Open the PR and merge when tests pass (Frank approved merging). Rerun `tests/session-smoke.cjs` in Electron.
@@ -28,6 +31,6 @@ PR to main still to open: https://github.com/TimothyKirchner/CS2DemoViewerEMania
   plant-split/economy rows, decisions/scope component breakdown, picks sorted by win-chance swing.
 
 ## Open issues
-- Tests 140/140 with the bundled node: C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe
+- Tests 142/142 with the bundled node: C:\Users\timot\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe
 - `scripts/opponent-report.mjs --cache review-out/cache` reruns in ~3 s (cache 337 MB, Git-ignored).
 - Never commit demos, review-out/ or SteamIDs/names (public repo).
