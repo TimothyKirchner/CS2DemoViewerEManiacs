@@ -76,8 +76,8 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   // T side without a dominant spread still gets its most common one, so the IGL sees the structure.
   // T starts per core player at 20 s (by callout, since mid lanes all count as "mid" in the spread).
   if(side===2&&pos.rounds>=SMALL){const seen=new Set(),starts=(pos.players??[]).filter(p=>p.rounds>=L.minRounds&&!seen.has(p.name)&&seen.add(p.name)).slice(0,5);
-    if(starts.length)out.push(habit('starts',`T starts at 20 s: ${starts.map(p=>`${p.name} ${p.place} ${pct(p.count/p.rounds)}`).join(', ')}`,starts.filter(p=>p.count/p.rounds>=.4).length,starts.length,
-      '',starts.flatMap(p=>p.evidence??[]).slice(0,5),{unit:'core players on a 40 %+ spot',small:false,
+    if(starts.length)out.push(habit('starts',`T starts at 20 s (share of each player's rounds): ${[...starts].sort((a,b)=>b.count/b.rounds-a.count/a.rounds).map(p=>`${p.name} ${p.place} ${pct(p.count/p.rounds)}`).join(', ')}`,starts.filter(p=>p.count/p.rounds>=.4).length,starts.length,
+      '',starts.flatMap(p=>p.evidence??[]).slice(0,5),{unit:'core players on a 40 %+ spot',small:false,countsOnly:true,
       counter:'Use these as the first spots to check with utility or info; a share under 50 % is a lean, not a default.'}));}
   // A T spread under the default threshold is not shown: per-player T starts carry that information.
   const awp=pos?.awp?.spots?.[0];
@@ -118,7 +118,7 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   if(side===2){const plants={A:0,B:0};for(const t of (buys?.types??[]).filter(t=>t.type!=='post-plant-save')){for(const r of t.routes??[]){const m=/^([AB]) plant$/.exec(r.name);if(m)plants[m[1]]+=r.count;}}
     const site=plants.A>=plants.B?'A':'B',n=plants.A+plants.B,even=Math.abs(plants.A-plants.B)<=Math.max(1,n*.1);
     if(rounds>=SMALL&&n)out.push(habit('plants',`Plant split: A ${plants.A} / B ${plants.B} / no plant ${Math.max(0,rounds-n)}; ${even?'even split':`${site} most`}`,plants[site],n,
-      !even&&plants[site]/n>=.65?`They favour ${site}: lean one extra player toward ${site} and rotate early from the other site.`:'No site preference: play standard and rotate on info.',[],{unit:'plants'}));}
+      !even&&plants[site]/n>=.65?`They favour ${site}: lean one extra player toward ${site} and rotate early from the other site.`:'No site preference: play standard and rotate on info.',[],{unit:'plants',countsOnly:even}));}
   // T full buys: the plant site they choose most (rounds without a plant do not count as a route).
   const full=(buys?.types??[]).find(t=>t.type==='full'),plant=full?.routes?.find(r=>/^[AB] plant$/.test(r.name));
   if(side===2&&plant&&full.count>=L.minRounds&&plant.count/full.count>=L.setupShare){const site=plant.name[0];
@@ -169,7 +169,7 @@ const evidenceText=e=>`R${e.number} · ${e.source}${Number.isFinite(e.tick)?` (t
 export function renderAntiStrat(report,format='markdown',{play=false,fragment=play}={}){
   const md=format==='markdown',h=s=>md?String(s??''):esc(s);
   const ev=list=>list.length?(md?` Evidence: ${list.map(evidenceText).join('; ')}.`:` <span class="report-evidence">${list.map(e=>play?`<button class="scout-evidence" data-play="${esc(e.entryId)}" data-round="${e.roundIndex}" data-tick="${Number.isFinite(e.tick)?e.tick:''}">▶ ${esc(evidenceText(e))}</button>`:esc(evidenceText(e))).join(' · ')}</span>`):'';
-  const item=x=>{const head=`${h(x.text)}: ${h(pct(x.share))} (${h(of(x.count,x.total,x.unit??'rounds'))})${x.small?' — small sample':''}.`,counter=x.counter?`${md?'*':'<em>'}Counter (heuristic):${md?'*':'</em>'} ${h(x.counter)}`:'Too few rounds for a counter.';
+  const item=x=>{const head=x.countsOnly?`${h(x.text)}.`:`${h(x.text)}: ${h(pct(x.share))} (${h(of(x.count,x.total,x.unit??'rounds'))})${x.small?' — small sample':''}.`,counter=x.counter?`${md?'*':'<em>'}Counter (heuristic):${md?'*':'</em>'} ${h(x.counter)}`:'Too few rounds for a counter.';
     return md?`- ${head} ${counter}${ev(x.evidence)}`:`<li>${head} ${counter}${ev(x.evidence)}</li>`;};
   const list=items=>items.length?(md?items.map(item).join('\n'):`<ul>${items.map(item).join('')}</ul>`):(md?'- No habit above the thresholds.':'<p class="muted">No habit above the thresholds.</p>');
   const plain=lines=>md?lines.map(l=>`- ${l}`).join('\n'):`<ul>${lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`;
