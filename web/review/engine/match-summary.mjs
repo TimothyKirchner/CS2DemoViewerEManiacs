@@ -34,7 +34,7 @@ export function matchSummary(replay, review, result) {
     const goto = Math.max(replay.rounds[p.round]?.live ?? 0, p.keyTick - REVIEW_LEAD_SECONDS * rate);
     return {
       round: p.roundNumber, side: p.side, won: p.won, kind: p.kind, category: p.category, title: p.title, confidence: p.confidence,
-      why: p.why, lookAt: p.lookAt, keyTick: p.keyTick, keyClock: p.keyClock, roundClock: p.roundClock,
+      why: p.why, lookAt: p.lookAt, buy: p.buy, winChance: p.winChance, keyTick: p.keyTick, keyClock: p.keyClock, roundClock: p.roundClock,
       gotoTick: Math.round(goto), command: `demo_gototick ${Math.round(goto)}`,
       also: p.categories.slice(1).map(c => c.type)
     };

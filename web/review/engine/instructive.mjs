@@ -196,12 +196,15 @@ export function instructiveRounds(replay, review, opts = {}) {
     const primary = cats[0], self = frameBefore(round.frames, round.live)?.players.find(p => p.id === me);
     const moments = cats.flatMap(c => c.moments.map(m => ({...m, kind: c.kind, look: c.look, severity: c.kind === "highlight" ? 1 : c.score >= 3.5 ? 3 : c.score >= 2 ? 2 : 1})));
     const windows = clipWindows(moments, round, rate, o), keyTick = primary.moments[0].tick;
+    // Win-probability swing of the key moment for your team (hand-set model, an estimate).
+    const wp = review?.rounds?.[index]?.winProbability ?? [], at = wp.findIndex(x => x.tick >= keyTick), sign = self?.team === 2 ? 1 : -1;
+    const swing = at > 0 && wp[at].tick === keyTick ? {before: r2(sign > 0 ? wp[at - 1].t : 1 - wp[at - 1].t), after: r2(sign > 0 ? wp[at].t : 1 - wp[at].t)} : null;
     candidates.push({
       round: index, roundNumber: round.number, score: r1(total), kind: bad >= 2 && good >= 2 ? "mixed" : bad >= good ? "mistake" : "highlight",
       category: primary.type, title: primary.title, confidence: primary.confidence, why: primary.why, lookAt: primary.look,
       side: self?.team === 2 ? "T" : "CT", buy: self ? teamBuy(replay, index, self.team) : null, won: winnerTeam(round.winner) !== null ? winnerTeam(round.winner) === self?.team : null,
       startTick: round.live, endTick: round.end, keyTick, keySeconds: r2(keyTick / rate), keyClock: mmss(keyTick / rate), roundClock: clock(round, keyTick, rate),
-      categories: cats.map(c => ({type: c.type, kind: c.kind, score: r1(c.score), confidence: c.confidence, why: c.why})),
+      winChance: swing, categories: cats.map(c => ({type: c.type, kind: c.kind, score: r1(c.score), confidence: c.confidence, why: c.why})),
       windows, spectate: {steamId: me, name: playerName(replay, me), accountId: accountId(me)}
     });
   });
@@ -262,7 +265,7 @@ export function instructiveMarkdown(result, {demo = "", plan = ""} = {}) {
   ];
   for (const p of result.picks) {
     const clips = p.windows.map(w => `${w.startClock}-${w.endClock} (${w.startTick}-${w.endTick})`).join("<br>");
-    lines.push(`| ${p.rank} | ${p.roundNumber} (${p.side}, ${p.won === null ? "?" : p.won ? "won" : "lost"}${p.buy ? `, ${p.buy}` : ""}) | ${p.kind} | ${cell(p.title)} | ${p.confidence} | ${p.keyClock} (${p.keySeconds}s, tick ${p.keyTick}) | ${clips} | ${cell(p.why)} Look at: ${cell(p.lookAt)} |`);
+    lines.push(`| ${p.rank} | ${p.roundNumber} (${p.side}, ${p.won === null ? "?" : p.won ? "won" : "lost"}${p.buy ? `, ${p.buy}` : ""}) | ${p.kind} | ${cell(p.title)} | ${p.confidence} | ${p.keyClock} (${p.keySeconds}s, tick ${p.keyTick}) | ${clips} | ${cell(p.why)}${p.winChance ? ` Team win chance (model estimate) ${Math.round(p.winChance.before * 100)}% to ${Math.round(p.winChance.after * 100)}%.` : ""} Look at: ${cell(p.lookAt)} |`);
   }
   for (const p of result.picks) {
     const extra = p.categories.slice(1).map(c => `${c.type} (${c.confidence})`).join(", ");

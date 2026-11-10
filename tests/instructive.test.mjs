@@ -162,3 +162,9 @@ test('ranking keeps at most maxDeaths death picks when other candidates exist',(
   assert.equal(picks.filter(p=>p.category==='untraded-death').length,4);
   assert.ok(picks.some(p=>p.category==='multikill')&&picks.some(p=>p.category==='team-flash'));
 });
+
+test('picks carry the win-chance swing of the key moment for the focus team',()=>{
+  const replay=match(SPECS),review=reviewReplay(replay,{detail:null});
+  const p=instructiveRounds(replay,review,{player:'1'}).picks.find(x=>x.roundNumber===1);
+  assert.ok(p.winChance&&p.winChance.after<p.winChance.before,'dying first lowers the T win chance');
+});
