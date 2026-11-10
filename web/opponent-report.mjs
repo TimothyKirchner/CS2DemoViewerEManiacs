@@ -10,9 +10,11 @@ import {escapeHtml as esc} from './scouting.mjs';
 // Editable default pool (CS2 Active Duty as assumed for late 2026). Maps outside the pool still get pages.
 export const DEFAULT_POOL=Object.freeze(['de_ancient','de_anubis','de_dust2','de_inferno','de_mirage','de_nuke','de_overpass']);
 // A habit is reported when it holds in at least `share` of at least `minRounds` rounds.
-export const HABIT_LIMITS=Object.freeze({minRounds:4,anchorShare:.6,tAnchorShare:.45,tradeEdge:.1,setupShare:.4,stackShare:.3,utilityShare:.5,awpShare:.5,placeOpenings:5,lowTrade:.35,forceShare:.5,minClutches:4,minCounter:5,retakeHigh:.45,retakeLow:.2,tUtilityShare:.35,duelEdge:.15,tightTiming:4,minTimingRounds:5});
+export const HABIT_LIMITS=Object.freeze({minRounds:4,anchorShare:.6,tAnchorShare:.45,tradeEdge:.1,setupShare:.4,stackShare:.3,utilityShare:.5,awpShare:.5,placeOpenings:5,lowTrade:.35,forceShare:.5,minClutches:4,minCounter:5,retakeHigh:.45,retakeLow:.2,tUtilityShare:.25,duelEdge:.15,tightTiming:4,minTimingRounds:5});
 const SMALL=10,MIN_COUNTER=8;
 const pct=v=>`${Math.round(v*100)}%`;
+// Wording follows the number: "most" only from 60 %.
+export const often=share=>share>=.6?'in most rounds':share>=.4?'in about half of the rounds':'in some rounds';
 const sideName=s=>s===2?'T':'CT';
 const of=(n,total,unit='rounds')=>`${n} of ${total} ${unit}`;
 const ref=e=>e&&{entryId:e.entryId,roundIndex:e.roundIndex,number:e.number,source:e.source,tick:e.tick};
@@ -74,10 +76,10 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   // T side without a dominant spread still gets its most common one, so the IGL sees the structure.
   // T starts per core player at 20 s (by callout, since mid lanes all count as "mid" in the spread).
   if(side===2&&pos.rounds>=SMALL){const seen=new Set(),starts=(pos.players??[]).filter(p=>p.rounds>=L.minRounds&&!seen.has(p.name)&&seen.add(p.name)).slice(0,5);
-    if(starts.length)out.push(habit('starts',`T starts at 20 s: ${starts.map(p=>`${p.name} ${p.place} ${pct(p.count/p.rounds)}`).join(', ')}`,starts.reduce((a,p)=>a+p.count,0),starts.reduce((a,p)=>a+p.rounds,0),
-      'Use these as the first spots to check with utility or info; a share under 50 % is a lean, not a default.',starts.flatMap(p=>p.evidence??[]).slice(0,5),{unit:'player rounds'}));}
-  if(side===2&&setup&&pos.rounds>=SMALL&&setup.share<L.setupShare&&!(setup.zones?.mid>=4))out.push(habit('setup',`Most common T spread (living players at ${at}): ${setup.label}; no single default`,setup.count,pos.rounds,
-    'They vary their spread: read their utility and first contact instead of a fixed default.',setup.evidence));
+    if(starts.length)out.push(habit('starts',`T starts at 20 s: ${starts.map(p=>`${p.name} ${p.place} ${pct(p.count/p.rounds)}`).join(', ')}`,starts.filter(p=>p.count/p.rounds>=.4).length,starts.length,
+      '',starts.flatMap(p=>p.evidence??[]).slice(0,5),{unit:'core players on a 40 %+ spot',small:false,
+      counter:'Use these as the first spots to check with utility or info; a share under 50 % is a lean, not a default.'}));}
+  // A T spread under the default threshold is not shown: per-player T starts carry that information.
   const awp=pos?.awp?.spots?.[0];
   if(awp&&pos.awp.rounds>=L.minRounds&&awp.share>=L.awpShare)out.push(habit('awp',`AWP on ${awp.place} (${awp.zone})${awp.holders[0]&&!awp.holders[0].label.startsWith('stand-in')?`, usually ${awp.holders[0].label}`:''}`,awp.count,pos.awp.rounds,
     'Smoke or flash that AWP angle before you cross it.',awp.evidence,{unit:'AWP rounds'}));
@@ -104,19 +106,19 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
   for(const [type,label] of [['smoke','Smoke'],['fire','Molly'],['flash','Flash']]){
     const c=tend?.utility?.types?.[type]?.clusters?.[0];
     // Clusters without a nearby callout are dropped: raw coordinates are not usable before a match.
-    if(!c||!c.place||c.place==='unknown'||c.share<(side===2?L.tUtilityShare:L.utilityShare)||rounds<L.minRounds)continue;
+    if(!c||!c.place||c.place==='unknown'||c.share<(side===2?L.tUtilityShare:L.utilityShare)||rounds<L.minRounds||(side===2&&c.share<L.utilityShare&&c.rounds<MIN_COUNTER))continue;
     // "Fixed timing" only for a tight window (25-75 % range <= 4 s) seen in 5+ rounds; otherwise just the window.
     const fixed=c.lateSeconds-c.earlySeconds<=L.tightTiming&&c.rounds>=L.minTimingRounds;
     out.push(habit('utility',`${label} near ${c.place} at ${c.medianSeconds.toFixed(0)} s (25-75 %: ${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s)${fixed?', fixed timing':', timing varies'}`,c.rounds,rounds,
       fixed?(side===3?`Their CT ${label.toLowerCase()} there lands by ${c.lateSeconds.toFixed(0)} s: do not walk into it; wait it out or take another lane.`
           :`Hold that area before ${c.earlySeconds.toFixed(0)} s or play off it: their ${label.toLowerCase()} lands at a fixed time, so it marks the start of their move.`)
-        :`Expect ${label.toLowerCase()} there in most rounds, but the timing varies (${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s): do not plan a timing around it.`,c.evidence,{fixed}));
+        :`Expect ${label.toLowerCase()} there ${often(c.share)}, but the timing varies (${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s): do not plan a timing around it.`,c.evidence,{fixed}));
   }
   // T plant split over all buys: the site structure even without a full-buy default.
   if(side===2){const plants={A:0,B:0};for(const t of (buys?.types??[]).filter(t=>t.type!=='post-plant-save')){for(const r of t.routes??[]){const m=/^([AB]) plant$/.exec(r.name);if(m)plants[m[1]]+=r.count;}}
-    const site=plants.A>=plants.B?'A':'B',n=plants.A+plants.B;
-    if(rounds>=SMALL&&n)out.push(habit('plants',`Plant split: A ${plants.A} / B ${plants.B} / no plant ${Math.max(0,rounds-n)}; ${site} most`,plants[site],n,
-      plants[site]/n>=.65?`They favour ${site}: lean one extra player toward ${site} and rotate early from the other site.`:'No site preference: play standard and rotate on info.',[],{unit:'plants'}));}
+    const site=plants.A>=plants.B?'A':'B',n=plants.A+plants.B,even=Math.abs(plants.A-plants.B)<=Math.max(1,n*.1);
+    if(rounds>=SMALL&&n)out.push(habit('plants',`Plant split: A ${plants.A} / B ${plants.B} / no plant ${Math.max(0,rounds-n)}; ${even?'even split':`${site} most`}`,plants[site],n,
+      !even&&plants[site]/n>=.65?`They favour ${site}: lean one extra player toward ${site} and rotate early from the other site.`:'No site preference: play standard and rotate on info.',[],{unit:'plants'}));}
   // T full buys: the plant site they choose most (rounds without a plant do not count as a route).
   const full=(buys?.types??[]).find(t=>t.type==='full'),plant=full?.routes?.find(r=>/^[AB] plant$/.test(r.name));
   if(side===2&&plant&&full.count>=L.minRounds&&plant.count/full.count>=L.setupShare){const site=plant.name[0];
@@ -131,7 +133,7 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
 export function economyNotes(economy,limits=HABIT_LIMITS){
   const counter={eco:'Expect an eco: play anti-eco, keep distance and do not give away rifles.',force:'Expect a force: play at range and avoid giving them easy rifle kills.',
     half:'Expect a half buy: play at range and avoid giving them easy rifle kills.',full:'Expect a full buy: bring your full utility.','anti-eco':'They full buy into your eco: save or play for exit kills.'};
-  return (economy?.rows??[]).filter(r=>r.count>0).map(r=>{const next=[...(r.next??[])].sort((a,b)=>b.count-a.count)[0],force=(r.force??0)+(r.half??0);
+  return (economy?.rows??[]).filter(r=>r.count>=limits.minRounds).map(r=>{const next=[...(r.next??[])].sort((a,b)=>b.count-a.count)[0],force=(r.force??0)+(r.half??0);
     return next?habit('economy',`${r.label}: next round mostly ${next.label.toLowerCase()}${next.type==='anti-eco'?' (full buy against your eco)':''}`,next.count,r.count,counter[next.type]??'Check the rounds before planning around it.',[],{unit:'rounds',force})
       :habit('economy',`${r.label}: force or half buy next`,force,r.count,force/r.count>=limits.forceShare?counter.force:counter.eco,[],{unit:'rounds'});});
 }
@@ -151,7 +153,7 @@ export function antiStratReport(entries,detection,{mapDefs={},pool=DEFAULT_POOL,
   const results=opponentMapResults(entries,detection);
   const maps=results.map(res=>{const pm=positions.maps.find(m=>m.map===res.map),tm=tendencies.maps.find(m=>m.map===res.map),bm=lib.maps.find(m=>m.map===res.map);
     const side=s=>({side:s,rounds:(s===2?tm?.t:tm?.ct)?.rounds??0,habits:sideHabits(s,{pos:s===2?pm?.t:pm?.ct,tend:s===2?tm?.t:tm?.ct,buys:bm?.sides.find(x=>x.side===s)})});
-    const sides=[side(3),side(2)];return {map:res.map,results:res,sites:Boolean(pm?.sites),sides,top:topReads(sides),standIns:standInNotes(detection,res.map)};});
+    const sides=[side(3),side(2)];return {map:res.map,results:res,sites:Boolean(pm?.sites),sides,top:topReads(sides),standIns:standInNotes(detection,res.map).filter(n=>!n.includes('Not named in player habits'))};});
   return {title,notes,generated:new Date().toISOString().slice(0,10),demos:detection.demos.length,total:detection.total,rounds:r.length,
     core:detection.players.filter(p=>p.core).map(p=>({name:p.name,description:p.description})),standIns:standInNotes(detection),
     veto:vetoSuggestion(results,{pool}),economy:economyNotes(tendencies.economy),maps,

@@ -110,3 +110,8 @@ test('top reads skip small samples; veto flags maps with one demo',()=>{
   const v=vetoSuggestion([r('de_ancient',30,50,3),r('de_anubis',10,25,1)]);
   assert.ok(v.notes.some(n=>n.includes('Weak data')&&n.includes('de_anubis')));
 });
+
+test('wording follows the number',async()=>{
+  const {often}=await import('../web/opponent-report.mjs');
+  assert.equal(often(.46),'in about half of the rounds');assert.equal(often(.7),'in most rounds');assert.equal(often(.3),'in some rounds');
+});
