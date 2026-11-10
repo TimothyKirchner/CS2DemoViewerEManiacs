@@ -106,9 +106,9 @@ export function sideHabits(side,{pos,tend,buys},limits=HABIT_LIMITS){
         :`Expect ${label.toLowerCase()} there in most rounds, but the timing varies (${c.earlySeconds.toFixed(0)}-${c.lateSeconds.toFixed(0)} s): do not plan a timing around it.`,c.evidence,{fixed}));
   }
   // T plant split over all buys: the site structure even without a full-buy default.
-  if(side===2){const plants={A:0,B:0};let tr=0;for(const t of buys?.types??[]){tr+=t.count;for(const r of t.routes??[]){const m=/^([AB]) plant$/.exec(r.name);if(m)plants[m[1]]+=r.count;}}
+  if(side===2){const plants={A:0,B:0};for(const t of (buys?.types??[]).filter(t=>t.type!=='post-plant-save')){for(const r of t.routes??[]){const m=/^([AB]) plant$/.exec(r.name);if(m)plants[m[1]]+=r.count;}}
     const site=plants.A>=plants.B?'A':'B',n=plants.A+plants.B;
-    if(tr>=SMALL&&n)out.push(habit('plants',`Plant split: A ${plants.A} / B ${plants.B} / no plant ${tr-n}; ${site} most`,plants[site],n,
+    if(rounds>=SMALL&&n)out.push(habit('plants',`Plant split: A ${plants.A} / B ${plants.B} / no plant ${Math.max(0,rounds-n)}; ${site} most`,plants[site],n,
       plants[site]/n>=.65?`They favour ${site}: lean one extra player toward ${site} and rotate early from the other site.`:'No site preference: play standard and rotate on info.',[],{unit:'plants'}));}
   // T full buys: the plant site they choose most (rounds without a plant do not count as a route).
   const full=(buys?.types??[]).find(t=>t.type==='full'),plant=full?.routes?.find(r=>/^[AB] plant$/.test(r.name));
@@ -175,7 +175,7 @@ export function renderAntiStrat(report,format='markdown',{play=false,fragment=pl
     parts.push(H(2,`${m.map}: how to beat them`),P(`${r.demos} ${r.demos===1?'demo':'demos'}, matches ${r.matchWins}-${r.matchLosses}${r.matchDraws?`-${r.matchDraws}`:''}; rounds won ${r.winRate===null?'—':pct(r.winRate)} (${r.sample}); CT ${r.sideRates[3]===null?'—':pct(r.sideRates[3])}, T ${r.sideRates[2]===null?'—':pct(r.sideRates[2])}.${m.sites?'':' No calibrated bombsites for this map: zones fall back to callouts only.'}`));
     const top=(m.top??[]).map(h=>({...h,text:`${sideName(h.side)}: ${h.text}`}));
     parts.push(H(3,'Top reads (10+ rounds)'),top.length?list(top):P('No habit with 10+ rounds yet: treat every line below as a lead to check in the evidence rounds.'));
-    const shown=new Set(m.top??[]);for(const s of m.sides)parts.push(H(3,`Their ${sideName(s.side)} side (${s.rounds} rounds, top reads not repeated)`),list(s.habits.filter(x=>!shown.has(x.ref??x))));
+    const shown=new Set((m.top??[]).map(t=>t.ref));for(const s of m.sides)parts.push(H(3,`Their ${sideName(s.side)} side (${s.rounds} rounds, top reads not repeated)`),list(s.habits.filter(x=>!shown.has(x))));
     if(m.standIns.length)parts.push(H(3,'Stand-in notes'),plain(m.standIns));
   }
   const body=parts.filter(Boolean).join(md?'\n\n':'\n');
